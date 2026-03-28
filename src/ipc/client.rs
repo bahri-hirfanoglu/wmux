@@ -557,7 +557,7 @@ async fn handle_prefix_split<W: tokio::io::AsyncWrite + Unpin>(
     }
 }
 
-/// Handle Prefix + x: kill pane with y/n confirmation.
+#[allow(dead_code)]
 async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
     session_id: &str,
     writer: &mut W,
