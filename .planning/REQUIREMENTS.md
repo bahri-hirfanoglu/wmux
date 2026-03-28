@@ -35,8 +35,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Configuration
 
-- [ ] **CONF-01**: User can configure wmux via TOML file (~/.config/wmux/config.toml)
-- [ ] **CONF-02**: User can set default shell (PowerShell, CMD, Git Bash, etc.)
+- [x] **CONF-01**: User can configure wmux via TOML file (~/.config/wmux/config.toml)
+- [x] **CONF-02**: User can set default shell (PowerShell, CMD, Git Bash, etc.)
 
 ### CLI
 
@@ -118,8 +118,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PANE-07 | Phase 2 | Complete |
 | INTG-01 | Phase 2 | Complete |
 | INTG-02 | Phase 2 | Complete |
-| CONF-01 | Phase 3 | Pending |
-| CONF-02 | Phase 3 | Pending |
+| CONF-01 | Phase 3 | Complete |
+| CONF-02 | Phase 3 | Complete |
 | CLI-02 | Phase 3 | Pending |
 | CLI-03 | Phase 3 | Pending |
 

@@ -4,13 +4,13 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 3 context gathered
-last_updated: "2026-03-28T17:12:41.415Z"
+last_updated: "2026-03-28T17:20:22.427Z"
 last_activity: 2026-03-28 — Completed 02-05 Scrollback Buffer and Scroll Mode
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 11
+  completed_plans: 10
   percent: 100
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Terminal sessions survive disconnection — users can detach, close their terminal, and reattach without losing state or processes.
-**Current focus:** Phase 2 — Session and Pane Core
+**Current focus:** Phase 3 — Configuration and Polish
 
 ## Current Position
 
-Phase: 2 of 3 (Session and Pane Core)
-Plan: 5 of 5 in current phase -- COMPLETE
+Phase: 3 of 3 (Configuration and Polish)
+Plan: 1 of 2 in current phase -- COMPLETE
 Status: Executing
-Last activity: 2026-03-28 — Completed 02-05 Scrollback Buffer and Scroll Mode
+Last activity: 2026-03-28 — Completed 03-01 Configuration File Support
 
-Progress: [██████████] 100% (Phase 2)
+Progress: [█████████░] 91% (Phase 3)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100% (Phase 2)
 | Phase 02 P03 | 9min | 2 tasks | 3 files |
 | Phase 02 P04 | 6min | 2 tasks | 4 files |
 | Phase 02 P05 | 8min | 2 tasks | 7 files |
+| Phase 03 P01 | 2min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 02-05]: push_bytes() partial line buffering for correct newline-based line splitting
 - [Phase 02-05]: build_scroll_response() sync helper pattern to avoid !Send HANDLE across await points
 - [Phase 02-05]: Scroll mode: 50-line pages with ANSI clear-screen rendering, vim keys (j/k/g/G) in addition to arrows
+- [Phase 03-01]: Config path uses %APPDATA% (not %LOCALAPPDATA%) to separate user config from runtime data
+- [Phase 03-01]: Missing config file returns defaults silently; only malformed TOML errors
+- [Phase 03-01]: Config loaded once at daemon startup, passed through to SessionManager
 
 ### Pending Todos
 
@@ -112,6 +116,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T17:12:41.413Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-configuration-and-polish/03-CONTEXT.md
+Last session: 2026-03-28T17:19:30Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: .planning/phases/03-configuration-and-polish/03-01-SUMMARY.md
