@@ -43,4 +43,4 @@ jobs:
         run: cargo build --all-features
 
       - name: Run tests
-        run: cargo test --all-features -- --skip conpty_manual_test
+        run: cargo test --all-features
