@@ -109,16 +109,10 @@ impl ConPtySession {
                 lpAttributeList: attr_list,
             };
 
-            // 4. Determine shell to launch
-            let shell_cmd = if let Some(s) = shell {
-                s.to_string()
-            } else {
-                // Try powershell first, fallback to cmd
-                if which_shell("powershell.exe") {
-                    "powershell.exe".to_string()
-                } else {
-                    "cmd.exe".to_string()
-                }
+            // 4. Determine shell to launch (default: cmd.exe)
+            let shell_cmd = match shell {
+                Some(s) => s.to_string(),
+                None => "cmd.exe".to_string(),
             };
 
             let mut cmd_line: Vec<u16> = shell_cmd.encode_utf16().chain(std::iter::once(0)).collect();
@@ -341,13 +335,4 @@ impl Drop for ConPtySession {
             let _ = self.kill();
         }
     }
-}
-
-/// Check if a shell executable exists on PATH.
-fn which_shell(name: &str) -> bool {
-    std::process::Command::new("where")
-        .arg(name)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
 }

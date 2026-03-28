@@ -173,12 +173,11 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     };
 
-    // 4. Clear terminal and show attach info
-    // Clear screen
+    // 4. Clear terminal, set window title with session info, show banner
     print!("\x1b[2J\x1b[H");
-    // Print session info footer (will be at top, pushed up by ConPTY output)
-    println!("\x1b[42;30m [wmux] session:{} | panes:{} | Ctrl+B d:detach \x1b[0m", session_id, pane_count);
-    println!();
+    // Set terminal window title — always visible regardless of scroll
+    print!("\x1b]0;wmux [session:{}] [panes:{}] Ctrl+B d:detach\x07", session_id, pane_count);
+    println!("\x1b[36m[wmux] session:{} | panes:{} | Ctrl+B d:detach\x1b[0m\n", session_id, pane_count);
 
     // 5. Set console codepage to UTF-8 so ConPTY output renders correctly
     let _cp_guard = set_utf8_codepage();
@@ -420,9 +419,11 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // Clean up — restore console mode
+    // Clean up — restore title and console mode
     drop(_raw_guard);
     drop(_cp_guard);
+    // Restore default window title
+    print!("\x1b]0;wmux\x07");
     drop(stdin_rx);
     drop(daemon_rx);
     daemon_reader.abort();
