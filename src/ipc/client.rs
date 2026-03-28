@@ -173,11 +173,12 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     };
 
-    // 4. Clear terminal, set window title with session info, show banner
+    // 4. Clear terminal and show banner
     print!("\x1b[2J\x1b[H");
-    // Set terminal window title — always visible regardless of scroll
-    print!("\x1b]0;wmux [session:{}] [panes:{}] Ctrl+B d:detach\x07", session_id, pane_count);
     println!("\x1b[36m[wmux] session:{} | panes:{} | Ctrl+B d:detach\x1b[0m\n", session_id, pane_count);
+    // Flush before entering raw mode
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
 
     // 5. Set console codepage to UTF-8 so ConPTY output renders correctly
     let _cp_guard = set_utf8_codepage();
@@ -196,6 +197,17 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
             stdout_handle,
             stdout_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
         );
+    }
+
+    // Set window title via Win32 API (survives ConPTY title changes)
+    {
+        let title = format!("wmux [session:{}] [panes:{}]\0", session_id, pane_count);
+        let wide: Vec<u16> = title.encode_utf16().collect();
+        unsafe {
+            windows::Win32::System::Console::SetConsoleTitleW(
+                windows::core::PCWSTR(wide.as_ptr()),
+            );
+        }
     }
 
     // Get stdin handle for reading input
@@ -419,11 +431,9 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // Clean up — restore title and console mode
+    // Clean up — restore console mode
     drop(_raw_guard);
     drop(_cp_guard);
-    // Restore default window title
-    print!("\x1b]0;wmux\x07");
     drop(stdin_rx);
     drop(daemon_rx);
     daemon_reader.abort();
