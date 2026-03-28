@@ -311,9 +311,11 @@ where
         let _ = tokio::task::spawn_blocking(move || {
             let handle = HANDLE(in_raw as *mut _);
             let mut written: u32 = 0;
-            // Override PowerShell prompt to show wmux prefix
+            // Override PowerShell prompt to show wmux prefix.
+            // The command sets the prompt function, then clears the screen
+            // so the raw command text isn't visible to the user.
             let prompt_cmd = format!(
-                "function prompt {{ Write-Host '[wmux:{}]' -NoNewline -ForegroundColor Cyan; \" $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}\r",
+                "function prompt {{ Write-Host '[wmux:{}]' -NoNewline -ForegroundColor Cyan; return \" $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}; Clear-Host\r",
                 sid
             );
             unsafe {
