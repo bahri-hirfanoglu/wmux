@@ -42,7 +42,7 @@ wmux ls             # list all sessions
 
 ## Installation
 
-### From crates.io (coming soon)
+### From crates.io
 
 ```
 cargo install wmux
