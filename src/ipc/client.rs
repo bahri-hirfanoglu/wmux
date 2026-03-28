@@ -160,26 +160,25 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         .await
         .context("Failed to read attach response")?;
 
-    match &response {
+    let pane_count = match &response {
         Response::AttachStarted {
-            session_id: sid,
+            session_id: _sid,
             pane_count,
-        } => {
-            info!(
-                "Attached to session {} ({} pane(s))",
-                sid, pane_count
-            );
-        }
+        } => *pane_count,
         Response::Error { message } => {
             bail!("Attach failed: {}", message);
         }
         other => {
             bail!("Unexpected response to attach: {:?}", other);
         }
-    }
+    };
 
-    // 4. Print attach banner before entering raw mode
-    eprintln!("\x1b[36m[wmux] attached to session {} (Ctrl+B d to detach)\x1b[0m", session_id);
+    // 4. Clear terminal and show attach info
+    // Clear screen
+    print!("\x1b[2J\x1b[H");
+    // Print session info footer (will be at top, pushed up by ConPTY output)
+    println!("\x1b[42;30m [wmux] session:{} | panes:{} | Ctrl+B d:detach \x1b[0m", session_id, pane_count);
+    println!();
 
     // 5. Set console codepage to UTF-8 so ConPTY output renders correctly
     let _cp_guard = set_utf8_codepage();
