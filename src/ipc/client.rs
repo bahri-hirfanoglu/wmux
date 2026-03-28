@@ -544,27 +544,225 @@ async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
     }
 }
 
-/// Enter scroll mode for the active pane (Prefix + [).
+/// Enter scroll mode: display scrollback buffer and navigate with keyboard/mouse.
 ///
-/// This is a placeholder — full scroll mode implementation is in a later plan.
-#[allow(unused_variables)]
-async fn enter_scroll_mode<R: tokio::io::AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
+/// Prefix+[ enters, q exits. Arrow keys and Page Up/Down scroll.
+/// Mouse wheel scrolling is handled via ANSI mouse escape sequences.
+async fn enter_scroll_mode<R, W>(
     session_id: &str,
     reader: &mut R,
     writer: &mut W,
     stdin_raw: isize,
     stdout_handle: HANDLE,
-) {
-    // Stub: scroll mode will be implemented in a later plan.
-    let msg = b"\r\n[scroll mode not yet implemented]\r\n";
+) where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    let pane_id = std::env::var("WMUX_PANE_ID")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+
+    // Request initial scrollback data from daemon
+    let req = Request::EnterScrollMode {
+        session_id: session_id.to_string(),
+        pane_id,
+    };
+    if let Err(e) = write_message(writer, &req).await {
+        info!("Failed to send EnterScrollMode: {}", e);
+        return;
+    }
+
+    // Read response with initial scrollback data
+    let response: Result<Response, _> = read_message(reader).await;
+    let (mut scroll_offset, mut total_lines) = match response {
+        Ok(Response::ScrollModeData { data, offset, total_lines }) => {
+            // Clear screen and display scrollback content
+            write_to_stdout(stdout_handle, b"\x1B[2J\x1B[H").await;
+            write_to_stdout(stdout_handle, &data).await;
+            write_scroll_status(stdout_handle, offset, total_lines).await;
+            (offset, total_lines)
+        }
+        Ok(Response::Error { message }) => {
+            info!("Scroll mode error: {}", message);
+            return;
+        }
+        _ => {
+            info!("Unexpected response for scroll mode");
+            return;
+        }
+    };
+
+    // Scroll mode input loop — normal keystrokes are NOT forwarded to shell
+    loop {
+        let stdin_r = stdin_raw;
+        let stdin_task = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+            let handle = HANDLE(stdin_r as *mut _);
+            let mut buf = vec![0u8; 256];
+            let mut bytes_read: u32 = 0;
+            unsafe {
+                ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
+                    .context("ReadFile from stdin failed")?;
+            }
+            buf.truncate(bytes_read as usize);
+            Ok(buf)
+        });
+
+        match stdin_task.await {
+            Ok(Ok(data)) if !data.is_empty() => {
+                let mut exit_scroll = false;
+                let mut new_offset: Option<i64> = None;
+
+                let mut j = 0;
+                while j < data.len() {
+                    let byte = data[j];
+
+                    // Check for ANSI escape sequences (arrow keys, page up/down, mouse)
+                    if byte == 0x1B && j + 2 < data.len() && data[j + 1] == b'[' {
+                        match data[j + 2] {
+                            b'A' => {
+                                // Arrow Up — scroll up 1 line
+                                new_offset = Some((scroll_offset as i64) - 1);
+                                j += 3;
+                                continue;
+                            }
+                            b'B' => {
+                                // Arrow Down — scroll down 1 line
+                                new_offset = Some((scroll_offset as i64) + 1);
+                                j += 3;
+                                continue;
+                            }
+                            b'5' if j + 3 < data.len() && data[j + 3] == b'~' => {
+                                // Page Up
+                                new_offset = Some((scroll_offset as i64) - SCROLL_PAGE_SIZE as i64);
+                                j += 4;
+                                continue;
+                            }
+                            b'6' if j + 3 < data.len() && data[j + 3] == b'~' => {
+                                // Page Down
+                                new_offset = Some((scroll_offset as i64) + SCROLL_PAGE_SIZE as i64);
+                                j += 4;
+                                continue;
+                            }
+                            b'M' if j + 5 < data.len() => {
+                                // Mouse event (X10 mode): ESC [ M button col row
+                                let button = data[j + 3];
+                                if button == 96 {
+                                    // Mouse wheel up
+                                    new_offset = Some((scroll_offset as i64) - 3);
+                                } else if button == 97 {
+                                    // Mouse wheel down
+                                    new_offset = Some((scroll_offset as i64) + 3);
+                                }
+                                j += 6;
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    match byte {
+                        b'q' | b'Q' => {
+                            exit_scroll = true;
+                            break;
+                        }
+                        b'k' => {
+                            // Vim-style up
+                            new_offset = Some((scroll_offset as i64) - 1);
+                        }
+                        b'j' => {
+                            // Vim-style down
+                            new_offset = Some((scroll_offset as i64) + 1);
+                        }
+                        b'g' => {
+                            // Go to top
+                            new_offset = Some(0);
+                        }
+                        b'G' => {
+                            // Go to bottom
+                            new_offset = Some(total_lines.saturating_sub(SCROLL_PAGE_SIZE) as i64);
+                        }
+                        _ => {
+                            // Ignore all other keys in scroll mode
+                        }
+                    }
+
+                    j += 1;
+                }
+
+                if exit_scroll {
+                    // Notify daemon we're leaving scroll mode
+                    let req = Request::ExitScrollMode {
+                        session_id: session_id.to_string(),
+                        pane_id,
+                    };
+                    let _ = write_message(writer, &req).await;
+                    // Clear scroll view so normal output can resume
+                    write_to_stdout(stdout_handle, b"\x1B[2J\x1B[H").await;
+                    break;
+                }
+
+                if let Some(target) = new_offset {
+                    // Clamp offset to valid range
+                    let clamped = target
+                        .max(0)
+                        .min(total_lines.saturating_sub(1) as i64) as i32;
+                    scroll_offset = clamped as usize;
+
+                    // Request scroll data from daemon
+                    let req = Request::ScrollBack {
+                        session_id: session_id.to_string(),
+                        pane_id,
+                        lines: clamped,
+                    };
+                    if let Err(e) = write_message(writer, &req).await {
+                        info!("Failed to send ScrollBack: {}", e);
+                        break;
+                    }
+
+                    // Read scroll response
+                    match read_message::<_, Response>(reader).await {
+                        Ok(Response::ScrollModeData { data, offset, total_lines: tl }) => {
+                            scroll_offset = offset;
+                            total_lines = tl;
+                            write_to_stdout(stdout_handle, b"\x1B[2J\x1B[H").await;
+                            write_to_stdout(stdout_handle, &data).await;
+                            write_scroll_status(stdout_handle, offset, total_lines).await;
+                        }
+                        Ok(_) => {}
+                        Err(e) => {
+                            info!("Scroll mode read error: {}", e);
+                            break;
+                        }
+                    }
+                }
+            }
+            _ => break,
+        }
+    }
+}
+
+/// Write bytes to stdout via spawn_blocking.
+async fn write_to_stdout(stdout_handle: HANDLE, data: &[u8]) {
     let stdout_raw = stdout_handle.0 as isize;
+    let data = data.to_vec();
     let _ = tokio::task::spawn_blocking(move || {
         let handle = HANDLE(stdout_raw as *mut _);
         let mut written: u32 = 0;
         unsafe {
-            let _ = WriteFile(handle, Some(msg), Some(&mut written), None);
+            let _ = WriteFile(handle, Some(&data), Some(&mut written), None);
         }
     }).await;
+}
+
+/// Write scroll position indicator to the top of the screen.
+async fn write_scroll_status(stdout_handle: HANDLE, offset: usize, total: usize) {
+    let status = format!(
+        "\x1B[s\x1B[1;1H\x1B[7m [scroll: {}/{} | q:quit arrows:scroll] \x1B[27m\x1B[u",
+        offset + 1,
+        total
+    );
+    write_to_stdout(stdout_handle, status.as_bytes()).await;
 }
 
 /// Enter raw console mode, returning a guard that restores the original mode on drop.

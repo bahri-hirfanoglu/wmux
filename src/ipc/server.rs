@@ -11,6 +11,9 @@ use windows::Win32::System::Threading::GetCurrentProcessId;
 use super::protocol::{read_message, write_message, Request, Response};
 use crate::session::SessionManager;
 
+/// Number of scrollback lines to send per scroll mode page.
+const SCROLL_PAGE_SIZE: usize = 50;
+
 pub struct ControlServer;
 
 impl ControlServer {
@@ -483,6 +486,28 @@ where
                         if let Err(e) = mgr.resize_pane(&sid, pane_id, cols, rows) {
                             warn!("Failed to resize pane {} in session {}: {}", pane_id, sid, e);
                         }
+                    }
+                    Ok(Request::EnterScrollMode { session_id: sid, pane_id }) => {
+                        let resp = {
+                            let mgr = session_manager.lock().await;
+                            build_scroll_response(&mgr, &sid, pane_id, None)
+                        };
+                        if let Some(r) = resp {
+                            let _ = write_message(&mut writer, &r).await;
+                        }
+                    }
+                    Ok(Request::ScrollBack { session_id: sid, pane_id, lines }) => {
+                        let resp = {
+                            let mgr = session_manager.lock().await;
+                            build_scroll_response(&mgr, &sid, pane_id, Some(lines))
+                        };
+                        if let Some(r) = resp {
+                            let _ = write_message(&mut writer, &r).await;
+                        }
+                    }
+                    Ok(Request::ExitScrollMode { .. }) => {
+                        // Client exited scroll mode — resume normal streaming
+                        info!("Client exited scroll mode for session {}", session_id);
                     }
                     Ok(other) => {
                         warn!("Unexpected request during attach: {:?}", other);

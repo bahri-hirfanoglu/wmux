@@ -70,6 +70,11 @@ pub enum Response {
         session_id: String,
         pane_count: u32,
     },
+    ScrollModeData {
+        data: Vec<u8>,
+        offset: usize,
+        total_lines: usize,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
