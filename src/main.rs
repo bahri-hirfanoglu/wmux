@@ -20,10 +20,10 @@ async fn main() -> anyhow::Result<()> {
             daemon::lifecycle::start_daemon().await?;
         }
         Some(Commands::Status) => {
-            daemon::lifecycle::daemon_status()?;
+            daemon::lifecycle::daemon_status().await?;
         }
         Some(Commands::KillServer) => {
-            daemon::lifecycle::kill_server()?;
+            daemon::lifecycle::kill_server().await?;
         }
         Some(Commands::New)
         | Some(Commands::Ls)

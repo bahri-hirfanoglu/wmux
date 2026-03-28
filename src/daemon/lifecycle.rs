@@ -78,8 +78,8 @@ pub async fn start_daemon() -> Result<()> {
     paths::wmux_data_dir()?;
 
     // Get the path to the current executable
-    let exe_path = std::env::current_exe()
-        .context("Failed to determine current executable path")?;
+    let exe_path =
+        std::env::current_exe().context("Failed to determine current executable path")?;
 
     // Spawn detached process with --daemon-mode flag
     // DETACHED_PROCESS (0x00000008) | CREATE_NO_WINDOW (0x08000000)
@@ -102,7 +102,8 @@ pub async fn start_daemon() -> Result<()> {
 /// Run the daemon main loop.
 ///
 /// This is the entry point when the binary is invoked with --daemon-mode.
-/// Writes PID file, initializes logging, and enters the event loop.
+/// Writes PID file, initializes logging, starts the control server, and
+/// waits for shutdown.
 pub async fn run_daemon() -> Result<()> {
     // Write PID file
     let pid = unsafe { GetCurrentProcessId() };
@@ -124,11 +125,32 @@ pub async fn run_daemon() -> Result<()> {
 
     info!("wmux daemon started (pid: {})", pid);
 
-    // Main event loop — for now, just wait for ctrl_c as a placeholder
-    // In Plan 02 this will be replaced with Named Pipe listener
+    // Create shutdown channel
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+    // Start the control server
+    let pipe_name = paths::control_pipe();
+    let server_handle = tokio::spawn(async move {
+        if let Err(e) =
+            wmux::ipc::server::ControlServer::start(&pipe_name, shutdown_rx, shutdown_tx).await
+        {
+            tracing::error!("Control server error: {}", e);
+        }
+    });
+
+    // Also listen for ctrl_c as a backup shutdown mechanism
+    let shutdown_tx_ctrlc = {
+        let (tx, _) = tokio::sync::watch::channel(false);
+        tx
+    };
+    // Note: ctrl_c won't fire for DETACHED_PROCESS, but useful during development
     tokio::select! {
+        _ = server_handle => {
+            info!("Control server exited");
+        }
         _ = tokio::signal::ctrl_c() => {
-            info!("wmux daemon received shutdown signal");
+            info!("wmux daemon received ctrl_c signal");
+            let _ = shutdown_tx_ctrlc;
         }
     }
 
@@ -139,44 +161,91 @@ pub async fn run_daemon() -> Result<()> {
     Ok(())
 }
 
-/// Print the daemon status.
-pub fn daemon_status() -> Result<()> {
-    match read_pid_file()? {
-        Some(pid) => {
-            if is_process_alive(pid) {
-                println!("Daemon is running (pid: {}, uptime: unknown)", pid);
-            } else {
-                // Stale PID file
-                remove_pid_file()?;
-                println!("Daemon is not running (cleaned stale PID file)");
+/// Print the daemon status using IPC if available, falling back to PID file.
+pub async fn daemon_status() -> Result<()> {
+    let pipe_name = paths::control_pipe();
+
+    // Try IPC first
+    match wmux::ipc::client::send_request(&pipe_name, &wmux::ipc::protocol::Request::Status).await
+    {
+        Ok(wmux::ipc::protocol::Response::Status {
+            running,
+            pid,
+            session_count,
+        }) => {
+            println!(
+                "Daemon is running (pid: {}, sessions: {})",
+                pid, session_count
+            );
+            let _ = running;
+        }
+        Ok(other) => {
+            println!("Unexpected response from daemon: {:?}", other);
+        }
+        Err(_) => {
+            // Fall back to PID file check
+            match read_pid_file()? {
+                Some(pid) => {
+                    if is_process_alive(pid) {
+                        println!(
+                            "Daemon is running (pid: {}, pipe not responding)",
+                            pid
+                        );
+                    } else {
+                        remove_pid_file()?;
+                        println!("Daemon is not running (cleaned stale PID file)");
+                    }
+                }
+                None => {
+                    println!("Daemon is not running");
+                }
             }
         }
-        None => {
-            println!("Daemon is not running");
-        }
     }
+
     Ok(())
 }
 
-/// Stop the daemon process.
-pub fn kill_server() -> Result<()> {
-    match read_pid_file()? {
-        Some(pid) => {
-            if is_process_alive(pid) {
-                unsafe {
-                    let handle = OpenProcess(PROCESS_TERMINATE, false, pid)
-                        .context("Failed to open daemon process for termination")?;
-                    TerminateProcess(handle, 1)
-                        .context("Failed to terminate daemon process")?;
-                    let _ = CloseHandle(handle);
+/// Stop the daemon process using IPC if available, falling back to process kill.
+pub async fn kill_server() -> Result<()> {
+    let pipe_name = paths::control_pipe();
+
+    // Try IPC first
+    match wmux::ipc::client::send_request(&pipe_name, &wmux::ipc::protocol::Request::KillServer)
+        .await
+    {
+        Ok(wmux::ipc::protocol::Response::Ok { message }) => {
+            println!("Daemon stopped ({})", message);
+            // Give daemon a moment to clean up, then verify
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            // Clean up PID file if daemon didn't get to it
+            let _ = remove_pid_file();
+        }
+        Ok(other) => {
+            println!("Unexpected response: {:?}", other);
+        }
+        Err(_) => {
+            // Fall back to process kill via PID
+            match read_pid_file()? {
+                Some(pid) => {
+                    if is_process_alive(pid) {
+                        unsafe {
+                            let handle = OpenProcess(PROCESS_TERMINATE, false, pid)
+                                .context("Failed to open daemon process for termination")?;
+                            TerminateProcess(handle, 1)
+                                .context("Failed to terminate daemon process")?;
+                            let _ = CloseHandle(handle);
+                        }
+                    }
+                    remove_pid_file()?;
+                    println!("Daemon stopped (killed via PID)");
+                }
+                None => {
+                    println!("Daemon is not running");
                 }
             }
-            remove_pid_file()?;
-            println!("Daemon stopped");
-        }
-        None => {
-            println!("Daemon is not running");
         }
     }
+
     Ok(())
 }
