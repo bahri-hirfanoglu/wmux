@@ -99,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
                     if sessions.is_empty() {
                         println!("No active sessions");
                     } else {
-                        println!("{:<6} {:<20} {:<8} {}", "ID", "NAME", "PANES", "CREATED");
+                        println!("{:<6} {:<20} {:<8} CREATED", "ID", "NAME", "PANES");
                         for s in &sessions {
                             println!(
                                 "{:<6} {:<20} {:<8} {}",

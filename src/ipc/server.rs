@@ -367,14 +367,9 @@ where
     let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<Request>(32);
     let client_reader = tokio::spawn(async move {
         let mut reader = reader;
-        loop {
-            match read_message::<_, Request>(&mut reader).await {
-                Ok(req) => {
-                    if client_tx.send(req).await.is_err() {
-                        break; // receiver dropped — attach ending
-                    }
-                }
-                Err(_) => break, // client disconnected
+        while let Ok(req) = read_message::<_, Request>(&mut reader).await {
+            if client_tx.send(req).await.is_err() {
+                break;
             }
         }
     });

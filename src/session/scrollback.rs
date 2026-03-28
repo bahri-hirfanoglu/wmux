@@ -81,11 +81,7 @@ impl ScrollbackBuffer {
     ///
     /// Returns fewer lines if the range extends beyond stored lines.
     pub fn get_lines(&self, start: usize, count: usize) -> Vec<&[u8]> {
-        let available = if start >= self.count {
-            0
-        } else {
-            self.count - start
-        };
+        let available = self.count.saturating_sub(start);
         let actual_count = count.min(available);
 
         let mut result = Vec::with_capacity(actual_count);

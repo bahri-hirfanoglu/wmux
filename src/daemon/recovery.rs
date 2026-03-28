@@ -10,7 +10,6 @@
 //! shells and log what happened. Scrollback is lost on crash (per CONTEXT.md decision).
 
 use std::fs;
-use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -94,7 +93,7 @@ pub fn save_state(state: &PersistedState) -> Result<()> {
 }
 
 /// Save state to a specific directory (for testing).
-pub fn save_state_to(state: &PersistedState, dir: &PathBuf) -> Result<()> {
+pub fn save_state_to(state: &PersistedState, dir: &std::path::Path) -> Result<()> {
     let state_path = dir.join("state.json");
     let tmp_path = dir.join("state.json.tmp");
 
@@ -123,7 +122,7 @@ pub fn load_state() -> Result<PersistedState> {
 }
 
 /// Load state from a specific directory (for testing).
-pub fn load_state_from(dir: &PathBuf) -> Result<PersistedState> {
+pub fn load_state_from(dir: &std::path::Path) -> Result<PersistedState> {
     let state_path = dir.join("state.json");
 
     if !state_path.exists() {

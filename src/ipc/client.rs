@@ -249,14 +249,9 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
     let (daemon_tx, mut daemon_rx) = tokio::sync::mpsc::channel::<Response>(64);
     let daemon_reader = tokio::spawn(async move {
         let mut reader = reader;
-        loop {
-            match read_message::<_, Response>(&mut reader).await {
-                Ok(resp) => {
-                    if daemon_tx.send(resp).await.is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
+        while let Ok(resp) = read_message::<_, Response>(&mut reader).await {
+            if daemon_tx.send(resp).await.is_err() {
+                break;
             }
         }
     });
@@ -918,7 +913,7 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
 /// Get terminal size (columns, rows).
 fn get_terminal_size() -> (u16, u16) {
     unsafe {
-        let handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap_or(HANDLE::default());
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap_or_default();
         let mut info =
             std::mem::zeroed::<windows::Win32::System::Console::CONSOLE_SCREEN_BUFFER_INFO>();
         if windows::Win32::System::Console::GetConsoleScreenBufferInfo(handle, &mut info).is_ok() {
