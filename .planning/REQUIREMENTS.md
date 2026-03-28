@@ -12,7 +12,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **DAEMON-01**: wmux-daemon runs as a background process, independent of any terminal window
 - [ ] **DAEMON-02**: Daemon manages all active sessions and their child processes
 - [ ] **DAEMON-03**: Daemon recovers sessions after unexpected crash or restart
-- [ ] **DAEMON-04**: Daemon communicates with clients via Named Pipes (\\.\pipe\wmux-*)
+- [x] **DAEMON-04**: Daemon communicates with clients via Named Pipes (\\.\pipe\wmux-*)
 
 ### Session
 
@@ -100,7 +100,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEMON-01 | Phase 1 | Complete |
 | DAEMON-02 | Phase 1 | Pending |
 | DAEMON-03 | Phase 1 | Pending |
-| DAEMON-04 | Phase 1 | Pending |
+| DAEMON-04 | Phase 1 | Complete |
 | CLI-01 | Phase 1 | Complete |
 | INTG-03 | Phase 1 | Pending |
 | SESS-01 | Phase 2 | Pending |

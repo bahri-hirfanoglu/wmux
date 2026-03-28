@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-28T14:57:53.759Z"
-last_activity: 2026-03-28 — Completed 01-01 Project Bootstrap and Daemon Lifecycle
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-28T15:04:05.908Z"
+last_activity: 2026-03-28 — Completed 01-02 Named Pipe IPC Layer
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
-  percent: 25
+  completed_plans: 2
+  percent: 50
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 1 of 3 (Daemon Foundation)
-Plan: 1 of 4 in current phase
+Plan: 2 of 4 in current phase
 Status: Executing
-Last activity: 2026-03-28 — Completed 01-01 Project Bootstrap and Daemon Lifecycle
+Last activity: 2026-03-28 — Completed 01-02 Named Pipe IPC Layer
 
-Progress: [███░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Progress: [███░░░░░░░] 25%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01 P02 | 3min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,8 @@ Recent decisions affecting current work:
 - Init: Local-only v1 — remote attach deferred to v2
 - [Phase 01-01]: Hidden --daemon-mode flag for internal daemon re-spawn (not hidden subcommand)
 - [Phase 01-01]: DETACHED_PROCESS | CREATE_NO_WINDOW flags for daemon backgrounding (no Windows Service needed)
+- [Phase 01-02]: Used tokio::net::windows::named_pipe for async pipe I/O (not raw windows-rs)
+- [Phase 01-02]: IPC commands fall back to PID file when pipe unresponsive
 
 ### Pending Todos
 
@@ -77,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T14:57:53.757Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-28T15:04:05.906Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
