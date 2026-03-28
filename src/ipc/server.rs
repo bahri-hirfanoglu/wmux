@@ -187,67 +187,17 @@ async fn handle_connection(
         }
         Request::EnterScrollMode { session_id, pane_id } => {
             let mgr = session_manager.lock().await;
-            match mgr.get_session(&session_id) {
-                Some(session) => {
-                    match session.panes.iter().find(|p| p.id() == pane_id) {
-                        Some(pane) => {
-                            let sb = pane.scrollback();
-                            let total = sb.line_count();
-                            let start = total.saturating_sub(50);
-                            let count = total - start;
-                            let lines = sb.get_lines(start, count);
-                            let mut data = Vec::new();
-                            for line in &lines {
-                                data.extend_from_slice(line);
-                                data.push(b'\n');
-                            }
-                            Response::ScrollModeData {
-                                data,
-                                offset: start,
-                                total_lines: total,
-                            }
-                        }
-                        None => Response::Error {
-                            message: format!("Pane {} not found in session '{}'", pane_id, session_id),
-                        },
-                    }
-                }
-                None => Response::Error {
-                    message: format!("Session '{}' not found", session_id),
-                },
-            }
+            build_scroll_response(&mgr, &session_id, pane_id, None)
+                .unwrap_or_else(|| Response::Error {
+                    message: format!("Pane {} not found in session '{}'", pane_id, session_id),
+                })
         }
         Request::ScrollBack { session_id, pane_id, lines } => {
             let mgr = session_manager.lock().await;
-            match mgr.get_session(&session_id) {
-                Some(session) => {
-                    match session.panes.iter().find(|p| p.id() == pane_id) {
-                        Some(pane) => {
-                            let sb = pane.scrollback();
-                            let total = sb.line_count();
-                            let offset = (lines.max(0) as usize).min(total.saturating_sub(1));
-                            let count = 50.min(total.saturating_sub(offset));
-                            let scroll_lines = sb.get_lines(offset, count);
-                            let mut data = Vec::new();
-                            for line in &scroll_lines {
-                                data.extend_from_slice(line);
-                                data.push(b'\n');
-                            }
-                            Response::ScrollModeData {
-                                data,
-                                offset,
-                                total_lines: total,
-                            }
-                        }
-                        None => Response::Error {
-                            message: format!("Pane {} not found", pane_id),
-                        },
-                    }
-                }
-                None => Response::Error {
-                    message: format!("Session '{}' not found", session_id),
-                },
-            }
+            build_scroll_response(&mgr, &session_id, pane_id, Some(lines))
+                .unwrap_or_else(|| Response::Error {
+                    message: format!("Pane {} not found in session '{}'", pane_id, session_id),
+                })
         }
         Request::ExitScrollMode { session_id: _, pane_id: _ } => {
             Response::Ok {
@@ -535,6 +485,45 @@ where
 
     info!("Attach handler finished for session {}", session_id);
     Ok(())
+}
+
+/// Build a scroll mode response from the scrollback buffer.
+///
+/// If `lines` is None, returns the last page (enter scroll mode).
+/// If `lines` is Some(offset), returns data starting at that offset.
+///
+/// Returns None if the session/pane is not found.
+/// IMPORTANT: This function must NOT be async — it borrows Pane (contains HANDLE)
+/// which is !Send. All data is extracted synchronously while the lock is held.
+fn build_scroll_response(
+    mgr: &SessionManager,
+    session_id: &str,
+    pane_id: u32,
+    lines: Option<i32>,
+) -> Option<Response> {
+    let session = mgr.get_session(session_id)?;
+    let pane = session.panes.iter().find(|p| p.id() == pane_id)?;
+    let sb = pane.scrollback();
+    let total = sb.line_count();
+
+    let offset = match lines {
+        None => total.saturating_sub(SCROLL_PAGE_SIZE),
+        Some(l) => (l.max(0) as usize).min(total.saturating_sub(1)),
+    };
+    let count = SCROLL_PAGE_SIZE.min(total.saturating_sub(offset));
+    let scroll_lines = sb.get_lines(offset, count);
+
+    let mut data = Vec::new();
+    for line in &scroll_lines {
+        data.extend_from_slice(line);
+        data.push(b'\n');
+    }
+
+    Some(Response::ScrollModeData {
+        data,
+        offset,
+        total_lines: total,
+    })
 }
 
 /// Helper: send an error response and return Ok(()).
