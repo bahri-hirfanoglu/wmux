@@ -78,3 +78,63 @@ pub fn wt_focus_pane(pane_index: u32) -> Result<()> {
 
     Ok(())
 }
+
+/// Move focus to an adjacent pane in the given direction.
+///
+/// `direction` should be one of: "up", "down", "left", "right".
+/// Uses the `wt.exe -w 0 move-focus` command (available in recent WT versions).
+pub fn wt_move_focus(direction: &str) -> Result<()> {
+    let output = std::process::Command::new("wt.exe")
+        .args(["-w", "0", "move-focus", "--direction", direction])
+        .output()
+        .context("Failed to execute wt.exe move-focus. Is Windows Terminal installed?")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Graceful fallback: move-focus may not be available in older WT versions
+        if stderr.contains("Unknown command") || stderr.contains("unrecognized") {
+            tracing::warn!("wt.exe move-focus not supported in this Windows Terminal version");
+            return Ok(());
+        }
+        bail!(
+            "wt.exe move-focus failed (exit code {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
+
+    Ok(())
+}
+
+/// Resize the active pane in the given direction by the specified amount.
+///
+/// `direction` should be one of: "up", "down", "left", "right".
+/// `amount` is the number of cells to resize by.
+/// Uses the `wt.exe -w 0 resize-pane` command.
+pub fn wt_resize_pane(direction: &str, amount: u32) -> Result<()> {
+    let output = std::process::Command::new("wt.exe")
+        .args([
+            "-w", "0",
+            "resize-pane",
+            "--direction", direction,
+            "--amount", &amount.to_string(),
+        ])
+        .output()
+        .context("Failed to execute wt.exe resize-pane. Is Windows Terminal installed?")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Graceful fallback: resize-pane may not be available in older WT versions
+        if stderr.contains("Unknown command") || stderr.contains("unrecognized") {
+            tracing::warn!("wt.exe resize-pane not supported in this Windows Terminal version");
+            return Ok(());
+        }
+        bail!(
+            "wt.exe resize-pane failed (exit code {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
+        );
+    }
+
+    Ok(())
+}

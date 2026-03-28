@@ -182,6 +182,75 @@ async fn handle_connection(
                 },
             }
         }
+        Request::EnterScrollMode { session_id, pane_id } => {
+            let mgr = session_manager.lock().await;
+            match mgr.get_session(&session_id) {
+                Some(session) => {
+                    match session.panes.iter().find(|p| p.id() == pane_id) {
+                        Some(pane) => {
+                            let sb = pane.scrollback();
+                            let total = sb.line_count();
+                            let start = total.saturating_sub(50);
+                            let count = total - start;
+                            let lines = sb.get_lines(start, count);
+                            let mut data = Vec::new();
+                            for line in &lines {
+                                data.extend_from_slice(line);
+                                data.push(b'\n');
+                            }
+                            Response::ScrollModeData {
+                                data,
+                                offset: start,
+                                total_lines: total,
+                            }
+                        }
+                        None => Response::Error {
+                            message: format!("Pane {} not found in session '{}'", pane_id, session_id),
+                        },
+                    }
+                }
+                None => Response::Error {
+                    message: format!("Session '{}' not found", session_id),
+                },
+            }
+        }
+        Request::ScrollBack { session_id, pane_id, lines } => {
+            let mgr = session_manager.lock().await;
+            match mgr.get_session(&session_id) {
+                Some(session) => {
+                    match session.panes.iter().find(|p| p.id() == pane_id) {
+                        Some(pane) => {
+                            let sb = pane.scrollback();
+                            let total = sb.line_count();
+                            let offset = (lines.max(0) as usize).min(total.saturating_sub(1));
+                            let count = 50.min(total.saturating_sub(offset));
+                            let scroll_lines = sb.get_lines(offset, count);
+                            let mut data = Vec::new();
+                            for line in &scroll_lines {
+                                data.extend_from_slice(line);
+                                data.push(b'\n');
+                            }
+                            Response::ScrollModeData {
+                                data,
+                                offset,
+                                total_lines: total,
+                            }
+                        }
+                        None => Response::Error {
+                            message: format!("Pane {} not found", pane_id),
+                        },
+                    }
+                }
+                None => Response::Error {
+                    message: format!("Session '{}' not found", session_id),
+                },
+            }
+        }
+        Request::ExitScrollMode { session_id: _, pane_id: _ } => {
+            Response::Ok {
+                message: "Exited scroll mode".to_string(),
+            }
+        }
         // AttachSession is handled above, but the compiler needs this arm
         Request::AttachSession { .. } => unreachable!(),
         _ => Response::Error {
@@ -292,6 +361,13 @@ where
             output_result = output_task => {
                 match output_result {
                     Ok(Ok(data)) if !data.is_empty() => {
+                        // Capture output in scrollback buffer (brief lock)
+                        {
+                            let mut mgr = session_manager.lock().await;
+                            if let Some(pane) = mgr.get_active_pane_mut(&session_id) {
+                                pane.scrollback_mut().push_bytes(&data);
+                            }
+                        }
                         let resp = Response::SessionOutput { data };
                         if let Err(e) = write_message(&mut writer, &resp).await {
                             warn!("Failed to send output to client: {}", e);
@@ -347,9 +423,69 @@ where
                         info!("Client requested detach from session {}", session_id);
                         break;
                     }
+                    Ok(Request::NavigatePane { session_id: sid, direction }) => {
+                        // Update daemon's active pane tracking (best-effort directional mapping)
+                        let mut mgr = session_manager.lock().await;
+                        if let Some(session) = mgr.get_session_mut(&sid) {
+                            let current_idx = session.panes.iter().position(|p| p.id() == session.active_pane).unwrap_or(0);
+                            let pane_count = session.panes.len();
+                            if pane_count > 1 {
+                                use crate::ipc::protocol::NavDirection;
+                                let new_idx = match direction {
+                                    NavDirection::Left | NavDirection::Up => {
+                                        if current_idx == 0 { pane_count - 1 } else { current_idx - 1 }
+                                    }
+                                    NavDirection::Right | NavDirection::Down => {
+                                        (current_idx + 1) % pane_count
+                                    }
+                                };
+                                let new_pane_id = session.panes[new_idx].id();
+                                session.active_pane = new_pane_id;
+                                for pane in &mut session.panes {
+                                    pane.set_active(pane.id() == new_pane_id);
+                                }
+                                info!("Navigated to pane {} in session {}", new_pane_id, sid);
+                            }
+                        }
+                    }
+                    Ok(Request::SplitPane { session_id: sid, direction: _ }) => {
+                        // Create a new pane on the daemon side
+                        let mut mgr = session_manager.lock().await;
+                        match mgr.add_pane(&sid, 120, 30, None) {
+                            Ok((pane_id, _pid)) => {
+                                // Send PaneInfo back so client can invoke wt.exe split-pane
+                                let resp = Response::PaneInfo {
+                                    session_id: sid.clone(),
+                                    pane_id,
+                                    pid: _pid,
+                                };
+                                let _ = write_message(&mut writer, &resp).await;
+                                info!("Split pane {} created in session {} (via prefix key)", pane_id, sid);
+                            }
+                            Err(e) => {
+                                warn!("Failed to split pane in session {}: {}", sid, e);
+                            }
+                        }
+                    }
+                    Ok(Request::KillPane { session_id: sid, pane_id }) => {
+                        let mut mgr = session_manager.lock().await;
+                        match mgr.kill_pane(&sid, pane_id) {
+                            Ok(()) => {
+                                info!("Pane {} killed in session {} (via prefix key)", pane_id, sid);
+                            }
+                            Err(e) => {
+                                warn!("Failed to kill pane {} in session {}: {}", pane_id, sid, e);
+                            }
+                        }
+                    }
+                    Ok(Request::ResizePane { session_id: sid, pane_id, cols, rows }) => {
+                        let mut mgr = session_manager.lock().await;
+                        if let Err(e) = mgr.resize_pane(&sid, pane_id, cols, rows) {
+                            warn!("Failed to resize pane {} in session {}: {}", pane_id, sid, e);
+                        }
+                    }
                     Ok(other) => {
                         warn!("Unexpected request during attach: {:?}", other);
-                        // Could handle inline commands here in future
                     }
                     Err(e) => {
                         // Client disconnected (pipe broken/closed)

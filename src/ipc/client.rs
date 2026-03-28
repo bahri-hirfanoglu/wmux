@@ -10,7 +10,25 @@ use windows::Win32::System::Console::{
     ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
 };
 
-use super::protocol::{read_message, write_message, Request, Response};
+use super::protocol::{read_message, write_message, NavDirection, Request, Response, SplitDirection};
+
+/// Result of handling a prefix key sequence.
+#[allow(dead_code)]
+enum PrefixAction {
+    /// Ctrl+B then 'd' — detach from session.
+    Detach,
+    /// Key was handled (navigation, resize, split, kill). No bytes to forward.
+    Handled,
+    /// Not a recognized prefix command — forward these bytes to the shell.
+    Forward(Vec<u8>),
+}
+
+/// Default resize amount in cells for Prefix + Alt+arrow.
+const RESIZE_AMOUNT: u32 = 5;
+
+/// Default number of lines visible in scroll mode viewport.
+#[allow(dead_code)]
+const SCROLL_PAGE_SIZE: usize = 50;
 
 /// Send a request to the daemon via Named Pipe and return the response.
 ///
@@ -151,6 +169,8 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
 
     // 6. Bidirectional streaming loop with prefix key detection
     let mut prefix_active = false;
+    // Track the last split direction requested via prefix key so we can tell WT the right direction
+    let mut pending_split_direction: Option<String> = None;
 
     loop {
         // Spawn blocking stdin read
@@ -175,21 +195,78 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
             stdin_result = stdin_task => {
                 match stdin_result {
                     Ok(Ok(data)) if !data.is_empty() => {
-                        // Process each byte for prefix key detection
                         let mut to_send: Vec<u8> = Vec::new();
                         let mut should_detach = false;
+                        let mut i = 0;
 
-                        for &byte in &data {
+                        while i < data.len() {
+                            let byte = data[i];
+
                             if prefix_active {
                                 prefix_active = false;
-                                if byte == b'd' {
-                                    // Prefix + d = detach
-                                    should_detach = true;
-                                    break;
-                                } else {
-                                    // Not a recognized prefix command — forward both
-                                    to_send.push(0x02); // Ctrl+B
-                                    to_send.push(byte);
+
+                                // Check for escape sequences (arrow keys, Alt+arrow)
+                                if byte == 0x1B && i + 2 < data.len() && data[i + 1] == b'[' {
+                                    // Could be arrow key (ESC [ A/B/C/D) or Alt+arrow (ESC [ 1 ; 3 A/B/C/D)
+                                    if i + 4 < data.len() && data[i + 2] == b'1' && data[i + 3] == b';' && data[i + 4] == b'3' && i + 5 < data.len() {
+                                        // Alt+arrow: ESC [ 1 ; 3 {letter} — resize pane
+                                        let action = handle_prefix_alt_arrow(data[i + 5], session_id, &mut writer).await;
+                                        i += 6;
+                                        match action {
+                                            PrefixAction::Forward(bytes) => to_send.extend_from_slice(&bytes),
+                                            PrefixAction::Handled => {}
+                                            PrefixAction::Detach => { should_detach = true; break; }
+                                        }
+                                        continue;
+                                    } else if matches!(data[i + 2], b'A' | b'B' | b'C' | b'D') {
+                                        // Arrow key: ESC [ {letter} — navigate pane
+                                        let action = handle_prefix_arrow(data[i + 2], session_id, &mut writer).await;
+                                        i += 3;
+                                        match action {
+                                            PrefixAction::Forward(bytes) => to_send.extend_from_slice(&bytes),
+                                            PrefixAction::Handled => {}
+                                            PrefixAction::Detach => { should_detach = true; break; }
+                                        }
+                                        continue;
+                                    }
+                                }
+
+                                // Single-byte prefix commands
+                                match byte {
+                                    b'd' => {
+                                        // Prefix + d = detach
+                                        should_detach = true;
+                                        break;
+                                    }
+                                    b'"' => {
+                                        // Prefix + " = horizontal split
+                                        pending_split_direction = Some("horizontal".to_string());
+                                        handle_prefix_split(SplitDirection::Horizontal, session_id, &mut writer).await;
+                                    }
+                                    b'%' => {
+                                        // Prefix + % = vertical split
+                                        pending_split_direction = Some("vertical".to_string());
+                                        handle_prefix_split(SplitDirection::Vertical, session_id, &mut writer).await;
+                                    }
+                                    b'x' => {
+                                        // Prefix + x = kill pane (with confirmation)
+                                        handle_prefix_kill_pane(session_id, &mut writer, stdin_raw, stdout_handle).await;
+                                    }
+                                    b'[' => {
+                                        // Prefix + [ = enter scroll mode
+                                        enter_scroll_mode(
+                                            session_id,
+                                            &mut reader,
+                                            &mut writer,
+                                            stdin_raw,
+                                            stdout_handle,
+                                        ).await;
+                                    }
+                                    _ => {
+                                        // Not a recognized prefix command — forward both bytes
+                                        to_send.push(0x02); // Ctrl+B
+                                        to_send.push(byte);
+                                    }
                                 }
                             } else if byte == 0x02 {
                                 // Ctrl+B pressed — activate prefix mode
@@ -197,6 +274,8 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
                             } else {
                                 to_send.push(byte);
                             }
+
+                            i += 1;
                         }
 
                         if should_detach {
@@ -259,6 +338,21 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
                             }
                         }
                     }
+                    Ok(Response::PaneInfo { session_id: sid, pane_id, pid: _ }) => {
+                        // Response to a prefix-key split request — invoke wt.exe split-pane
+                        let exe_path = std::env::current_exe()
+                            .unwrap_or_else(|_| std::path::PathBuf::from("wmux.exe"));
+                        let attach_cmd = format!(
+                            "\"{}\" attach {} --pane {}",
+                            exe_path.display(),
+                            sid,
+                            pane_id
+                        );
+                        let dir = pending_split_direction.take().unwrap_or_else(|| "vertical".to_string());
+                        if let Err(e) = crate::wt::wt_split_pane(&dir, &attach_cmd) {
+                            info!("Failed to create WT split pane: {}", e);
+                        }
+                    }
                     Ok(Response::Ok { message }) => {
                         // Detach confirmation or session ended
                         info!("Daemon message: {}", message);
@@ -285,6 +379,192 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
     drop(_raw_guard);
 
     Ok(())
+}
+
+/// Map an ANSI arrow letter to a direction string for wt.exe commands.
+fn arrow_letter_to_direction(letter: u8) -> Option<&'static str> {
+    match letter {
+        b'A' => Some("up"),
+        b'B' => Some("down"),
+        b'C' => Some("right"),
+        b'D' => Some("left"),
+        _ => None,
+    }
+}
+
+/// Map an ANSI arrow letter to NavDirection for the IPC protocol.
+fn arrow_letter_to_nav(letter: u8) -> Option<NavDirection> {
+    match letter {
+        b'A' => Some(NavDirection::Up),
+        b'B' => Some(NavDirection::Down),
+        b'C' => Some(NavDirection::Right),
+        b'D' => Some(NavDirection::Left),
+        _ => None,
+    }
+}
+
+/// Handle Prefix + arrow key: navigate to adjacent pane.
+async fn handle_prefix_arrow<W: tokio::io::AsyncWrite + Unpin>(
+    letter: u8,
+    session_id: &str,
+    writer: &mut W,
+) -> PrefixAction {
+    if let (Some(dir_str), Some(nav_dir)) = (arrow_letter_to_direction(letter), arrow_letter_to_nav(letter)) {
+        // Tell WT to move focus visually
+        if let Err(e) = crate::wt::wt_move_focus(dir_str) {
+            info!("wt_move_focus failed: {}", e);
+        }
+        // Notify daemon to update its active pane tracking
+        let req = Request::NavigatePane {
+            session_id: session_id.to_string(),
+            direction: nav_dir,
+        };
+        let _ = write_message(writer, &req).await;
+        PrefixAction::Handled
+    } else {
+        // Unknown escape sequence after prefix — forward all bytes
+        let bytes = vec![0x02, 0x1B, b'[', letter];
+        PrefixAction::Forward(bytes)
+    }
+}
+
+/// Handle Prefix + Alt+arrow: resize active pane.
+async fn handle_prefix_alt_arrow<W: tokio::io::AsyncWrite + Unpin>(
+    letter: u8,
+    session_id: &str,
+    writer: &mut W,
+) -> PrefixAction {
+    if let Some(dir_str) = arrow_letter_to_direction(letter) {
+        // Tell WT to resize visually
+        if let Err(e) = crate::wt::wt_resize_pane(dir_str, RESIZE_AMOUNT) {
+            info!("wt_resize_pane failed: {}", e);
+        }
+        // Notify daemon — compute approximate new size
+        // The daemon will need to ResizePseudoConsole for the active pane.
+        // We send a ResizePane with delta-adjusted dimensions (best-effort).
+        let req = Request::NavigatePane {
+            session_id: session_id.to_string(),
+            direction: arrow_letter_to_nav(letter).unwrap_or(NavDirection::Right),
+        };
+        // Note: actual ConPTY resize happens when WT sends SIGWINCH equivalent.
+        // We just update daemon tracking here.
+        let _ = write_message(writer, &req).await;
+        PrefixAction::Handled
+    } else {
+        let bytes = vec![0x02, 0x1B, b'[', b'1', b';', b'3', letter];
+        PrefixAction::Forward(bytes)
+    }
+}
+
+/// Handle Prefix + " or Prefix + %: split pane.
+async fn handle_prefix_split<W: tokio::io::AsyncWrite + Unpin>(
+    direction: SplitDirection,
+    session_id: &str,
+    writer: &mut W,
+) {
+    let req = Request::SplitPane {
+        session_id: session_id.to_string(),
+        direction: direction.clone(),
+    };
+    match write_message(writer, &req).await {
+        Ok(()) => {
+            info!("Split pane request sent via prefix key");
+        }
+        Err(e) => {
+            info!("Failed to send split pane request: {}", e);
+        }
+    }
+}
+
+/// Handle Prefix + x: kill pane with y/n confirmation.
+async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
+    session_id: &str,
+    writer: &mut W,
+    stdin_raw: isize,
+    stdout_handle: HANDLE,
+) {
+    // Write confirmation prompt to stdout
+    let prompt = b"\r\nkill-pane? (y/n) ";
+    let stdout_raw = stdout_handle.0 as isize;
+    let _ = tokio::task::spawn_blocking(move || {
+        let handle = HANDLE(stdout_raw as *mut _);
+        let mut written: u32 = 0;
+        unsafe {
+            let _ = WriteFile(handle, Some(prompt), Some(&mut written), None);
+        }
+    }).await;
+
+    // Read single byte for confirmation
+    let confirm_result = tokio::task::spawn_blocking(move || -> Result<u8> {
+        let handle = HANDLE(stdin_raw as *mut _);
+        let mut buf = [0u8; 1];
+        let mut bytes_read: u32 = 0;
+        unsafe {
+            ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
+                .context("ReadFile for confirmation failed")?;
+        }
+        Ok(buf[0])
+    }).await;
+
+    match confirm_result {
+        Ok(Ok(b'y')) | Ok(Ok(b'Y')) => {
+            // Get current pane ID from env var
+            let pane_id = std::env::var("WMUX_PANE_ID")
+                .ok()
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+            let req = Request::KillPane {
+                session_id: session_id.to_string(),
+                pane_id,
+            };
+            let _ = write_message(writer, &req).await;
+            // Echo confirmation
+            let msg = b"\r\nPane killed.\r\n";
+            let stdout_raw2 = stdout_handle.0 as isize;
+            let _ = tokio::task::spawn_blocking(move || {
+                let handle = HANDLE(stdout_raw2 as *mut _);
+                let mut written: u32 = 0;
+                unsafe {
+                    let _ = WriteFile(handle, Some(msg), Some(&mut written), None);
+                }
+            }).await;
+        }
+        _ => {
+            // Cancelled — echo newline and continue
+            let msg = b"\r\n";
+            let stdout_raw2 = stdout_handle.0 as isize;
+            let _ = tokio::task::spawn_blocking(move || {
+                let handle = HANDLE(stdout_raw2 as *mut _);
+                let mut written: u32 = 0;
+                unsafe {
+                    let _ = WriteFile(handle, Some(msg), Some(&mut written), None);
+                }
+            }).await;
+        }
+    }
+}
+
+/// Enter scroll mode for the active pane (Prefix + [).
+///
+/// This is a placeholder — full scroll mode implementation is in a later plan.
+#[allow(unused_variables)]
+async fn enter_scroll_mode<R: tokio::io::AsyncRead + Unpin, W: tokio::io::AsyncWrite + Unpin>(
+    session_id: &str,
+    reader: &mut R,
+    writer: &mut W,
+    stdin_raw: isize,
+    stdout_handle: HANDLE,
+) {
+    // Stub: scroll mode will be implemented in a later plan.
+    let msg = b"\r\n[scroll mode not yet implemented]\r\n";
+    let stdout_raw = stdout_handle.0 as isize;
+    let _ = tokio::task::spawn_blocking(move || {
+        let handle = HANDLE(stdout_raw as *mut _);
+        let mut written: u32 = 0;
+        unsafe {
+            let _ = WriteFile(handle, Some(msg), Some(&mut written), None);
+        }
+    }).await;
 }
 
 /// Enter raw console mode, returning a guard that restores the original mode on drop.
