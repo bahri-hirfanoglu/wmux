@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-03-28T15:10:40Z"
-last_activity: 2026-03-28 — Completed 01-03 ConPTY Shell Spawning and Session Management
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-03-28T15:24:25Z"
+last_activity: 2026-03-28 — Completed 01-04 Crash Recovery and State Persistence
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -25,25 +25,25 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 
 ## Current Position
 
-Phase: 1 of 3 (Daemon Foundation)
-Plan: 3 of 4 in current phase
+Phase: 1 of 3 (Daemon Foundation) -- COMPLETE
+Plan: 4 of 4 in current phase
 Status: Executing
-Last activity: 2026-03-28 — Completed 01-03 ConPTY Shell Spawning and Session Management
+Last activity: 2026-03-28 — Completed 01-04 Crash Recovery and State Persistence
 
-Progress: [███████░░░] 75%
+Progress: [██████████] 100% (Phase 1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 4.5min
-- Total execution time: 9min
+- Total plans completed: 4
+- Average duration: 5min
+- Total execution time: 20min
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-daemon-foundation | 2/4 | 9min | 4.5min |
+| 01-daemon-foundation | 4/4 | 20min | 5min |
 
 **Recent Trend:**
 - Last 5 plans: -
@@ -52,6 +52,7 @@ Progress: [███████░░░] 75%
 *Updated after each plan completion*
 | Phase 01 P02 | 3min | 2 tasks | 8 files |
 | Phase 01 P03 | 6min | 2 tasks | 9 files |
+| Phase 01 P04 | 11min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,9 @@ Recent decisions affecting current work:
 - [Phase 01-03]: ConPTY pipes: daemon keeps input_write/output_read, child-side ends closed after spawn
 - [Phase 01-03]: SessionManager shared via Arc<tokio::sync::Mutex> for async-safe IPC handler access
 - [Phase 01-03]: Default shell: powershell.exe with cmd.exe fallback via `where` detection
+- [Phase 01-04]: ConPTY handles are process-local; always respawn shells on crash recovery (cannot re-adopt)
+- [Phase 01-04]: State persistence is best-effort: errors logged, never fail session operations
+- [Phase 01-04]: daemon/paths modules exposed from library crate for integration test access
 
 ### Pending Todos
 
@@ -84,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T15:10:40Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-03-28T15:24:25Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None

@@ -12,7 +12,7 @@ wmux is built in three phases. Phase 1 establishes the daemon process and IPC fo
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Daemon Foundation** - Background daemon process with Named Pipe IPC and ConPTY scaffolding
+- [x] **Phase 1: Daemon Foundation** - Background daemon process with Named Pipe IPC and ConPTY scaffolding (completed 2026-03-28)
 - [ ] **Phase 2: Session and Pane Core** - Full session lifecycle and pane management via CLI and Windows Terminal
 - [ ] **Phase 3: Configuration and Polish** - TOML config, CLI help/errors, and distribution readiness
 
@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The daemon can spawn and manage a shell process through ConPTY on Windows 10 1809+
   4. The daemon recovers its state and restarts child processes after an unexpected crash or restart
   5. `wmux` binary exists as a single self-contained executable that can reach the daemon
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 - [ ] 01-01-PLAN.md — Project scaffold, CLI, and daemon lifecycle (start/stop/status)
@@ -65,6 +65,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Daemon Foundation | 3/4 | In Progress|  |
+| 1. Daemon Foundation | 4/4 | Complete   | 2026-03-28 |
 | 2. Session and Pane Core | 0/TBD | Not started | - |
 | 3. Configuration and Polish | 0/TBD | Not started | - |
