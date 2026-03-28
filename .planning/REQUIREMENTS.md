@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Daemon
 
-- [ ] **DAEMON-01**: wmux-daemon runs as a background process, independent of any terminal window
+- [x] **DAEMON-01**: wmux-daemon runs as a background process, independent of any terminal window
 - [ ] **DAEMON-02**: Daemon manages all active sessions and their child processes
 - [ ] **DAEMON-03**: Daemon recovers sessions after unexpected crash or restart
 - [ ] **DAEMON-04**: Daemon communicates with clients via Named Pipes (\\.\pipe\wmux-*)
@@ -40,7 +40,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### CLI
 
-- [ ] **CLI-01**: `wmux` binary is a single self-contained executable
+- [x] **CLI-01**: `wmux` binary is a single self-contained executable
 - [ ] **CLI-02**: CLI provides help text and usage info for all commands
 - [ ] **CLI-03**: CLI exits with appropriate error codes and messages
 
@@ -97,11 +97,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DAEMON-01 | Phase 1 | Pending |
+| DAEMON-01 | Phase 1 | Complete |
 | DAEMON-02 | Phase 1 | Pending |
 | DAEMON-03 | Phase 1 | Pending |
 | DAEMON-04 | Phase 1 | Pending |
-| CLI-01 | Phase 1 | Pending |
+| CLI-01 | Phase 1 | Complete |
 | INTG-03 | Phase 1 | Pending |
 | SESS-01 | Phase 2 | Pending |
 | SESS-02 | Phase 2 | Pending |
