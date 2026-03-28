@@ -25,12 +25,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Pane
 
-- [ ] **PANE-01**: User can split current pane horizontally with `wmux split -h`
-- [ ] **PANE-02**: User can split current pane vertically with `wmux split -v`
+- [x] **PANE-01**: User can split current pane horizontally with `wmux split -h`
+- [x] **PANE-02**: User can split current pane vertically with `wmux split -v`
 - [ ] **PANE-03**: User can navigate between panes with keybindings
 - [ ] **PANE-04**: User can resize panes with keybindings
 - [x] **PANE-05**: Each pane runs an independent shell process via ConPTY
-- [ ] **PANE-06**: User can close a pane with `wmux kill-pane`
+- [x] **PANE-06**: User can close a pane with `wmux kill-pane`
 - [ ] **PANE-07**: User can scroll back through pane output history
 
 ### Configuration
@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Integration
 
 - [x] **INTG-01**: wmux leverages Windows Terminal Pane API for rendering
-- [ ] **INTG-02**: Pane splits and layout are managed through WT's native pane system
+- [x] **INTG-02**: Pane splits and layout are managed through WT's native pane system
 - [x] **INTG-03**: wmux works on Windows 10 1809+ (ConPTY requirement)
 
 ## v2 Requirements
@@ -109,15 +109,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SESS-04 | Phase 2 | Complete |
 | SESS-05 | Phase 2 | Pending |
 | SESS-06 | Phase 2 | Complete |
-| PANE-01 | Phase 2 | Pending |
-| PANE-02 | Phase 2 | Pending |
+| PANE-01 | Phase 2 | Complete |
+| PANE-02 | Phase 2 | Complete |
 | PANE-03 | Phase 2 | Pending |
 | PANE-04 | Phase 2 | Pending |
 | PANE-05 | Phase 2 | Complete |
-| PANE-06 | Phase 2 | Pending |
+| PANE-06 | Phase 2 | Complete |
 | PANE-07 | Phase 2 | Pending |
 | INTG-01 | Phase 2 | Complete |
-| INTG-02 | Phase 2 | Pending |
+| INTG-02 | Phase 2 | Complete |
 | CONF-01 | Phase 3 | Pending |
 | CONF-02 | Phase 3 | Pending |
 | CLI-02 | Phase 3 | Pending |
