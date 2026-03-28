@@ -1,5 +1,8 @@
-//! Manual test: spawn powershell via ConPTY and read its output.
+//! Manual test: spawn cmd.exe via ConPTY and read its output.
 //! Run with: cargo test --test conpty_manual_test -- --nocapture
+//!
+//! NOTE: This test requires a real Windows desktop session with ConPTY support.
+//! It will fail in CI (GitHub Actions) where no interactive console is available.
 
 use std::thread;
 use std::time::Duration;
