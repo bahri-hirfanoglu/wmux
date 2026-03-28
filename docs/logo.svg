@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160" width="400" height="160">
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="400" height="160" rx="12" fill="#0d1117"/>
+  <text x="200" y="55" text-anchor="middle" font-family="Consolas,monospace" font-size="22" font-weight="bold" fill="#00ff41" filter="url(#glow)">╦ ╦╔╦╗╦ ╦═╗ ╦</text>
+  <text x="200" y="80" text-anchor="middle" font-family="Consolas,monospace" font-size="22" font-weight="bold" fill="#00ff41" filter="url(#glow)">║║║║║║║ ║╔╩╦╝</text>
+  <text x="200" y="105" text-anchor="middle" font-family="Consolas,monospace" font-size="22" font-weight="bold" fill="#00ff41" filter="url(#glow)">╚╩╝╩ ╩╚═╝╩ ╚═</text>
+  <text x="200" y="138" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#8b949e">A native Windows terminal multiplexer — tmux for Windows</text>
+</svg>

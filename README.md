@@ -1,10 +1,8 @@
 <p align="center">
   <br>
-  <code>&nbsp;╦ ╦╔╦╗╦ ╦═╗ ╦&nbsp;</code><br>
-  <code>&nbsp;║║║║║║║ ║╔╩╦╝&nbsp;</code><br>
-  <code>&nbsp;╚╩╝╩ ╩╚═╝╩ ╚═&nbsp;</code><br>
-  <br>
-  <strong>A native Windows terminal multiplexer — tmux for Windows.</strong>
+  <a href="https://bahri-hirfanoglu.github.io/wmux/">
+    <img src="docs/logo.svg" alt="wmux" width="400">
+  </a>
   <br><br>
   <a href="https://crates.io/crates/wmux"><img src="https://img.shields.io/crates/v/wmux.svg" alt="crates.io"></a>
   <a href="https://crates.io/crates/wmux"><img src="https://img.shields.io/crates/d/wmux.svg" alt="Downloads"></a>
