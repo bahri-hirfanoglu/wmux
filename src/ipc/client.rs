@@ -326,8 +326,16 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
                                         handle_prefix_split(SplitDirection::Vertical, session_id, &mut writer).await;
                                     }
                                     b'x' => {
-                                        // Prefix + x = kill pane (with confirmation)
-                                        handle_prefix_kill_pane(session_id, &mut writer, stdin_raw, stdout_handle).await;
+                                        // Prefix + x = kill current pane
+                                        let pane_id = std::env::var("WMUX_PANE_ID")
+                                            .ok()
+                                            .and_then(|s| s.parse::<u32>().ok())
+                                            .unwrap_or(0);
+                                        let req = Request::KillPane {
+                                            session_id: session_id.to_string(),
+                                            pane_id,
+                                        };
+                                        let _ = write_message(&mut writer, &req).await;
                                     }
                                     b'[' => {
                                         // Prefix + [ = scroll mode (TODO: needs refactor for channel-based reader)
