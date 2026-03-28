@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 1200px;
+  height: 630px;
+  background: #0d1117;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Grid bg */
+body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(48,54,61,0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(48,54,61,0.3) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Green glow orb */
+.glow-orb {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0,255,65,0.08) 0%, transparent 70%);
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Logo */
+.logo {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 80px;
+  font-weight: 900;
+  color: #00ff41;
+  letter-spacing: 8px;
+  text-shadow: 0 0 40px rgba(0,255,65,0.4), 0 0 80px rgba(0,255,65,0.2);
+}
+
+.tagline {
+  font-size: 28px;
+  color: #8b949e;
+  font-weight: 400;
+  margin-top: -8px;
+}
+
+.tagline strong {
+  color: #c9d1d9;
+}
+
+/* Terminal mockup */
+.terminal {
+  width: 820px;
+  background: #0a0e14;
+  border: 1.5px solid #30363d;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.terminal-bar {
+  background: #161b22;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 8px;
+}
+
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.dot-r { background: #f85149; }
+.dot-y { background: #d29922; }
+.dot-g { background: #3fb950; }
+
+.terminal-bar span {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  color: #484f58;
+  font-family: Consolas, monospace;
+}
+
+.terminal-body {
+  padding: 18px 20px;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 15.5px;
+  line-height: 1.7;
+}
+
+.prompt { color: #6e7681; }
+.cmd { color: #00ff41; }
+.output { color: #58a6ff; }
+.success { color: #3fb950; }
+.text { color: #c9d1d9; }
+
+.status-bar {
+  background: #238636;
+  padding: 8px 20px;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Bottom */
+.bottom {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  margin-top: 12px;
+}
+
+.install-badge {
+  background: #161b22;
+  border: 1.5px solid #00ff41;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-family: Consolas, monospace;
+  font-size: 18px;
+  color: #00ff41;
+}
+
+.links {
+  font-size: 15px;
+  color: #484f58;
+}
+
+.links a {
+  color: #58a6ff;
+  text-decoration: none;
+}
+
+.badges {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.badge {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: #8b949e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge .icon { color: #00ff41; font-size: 15px; }
+</style>
+</head>
+<body>
+  <div class="glow-orb"></div>
+  <div class="content">
+    <div class="logo">wmux</div>
+    <div class="tagline"><strong>tmux for Windows</strong> &mdash; built in Rust</div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+        <span>Windows Terminal</span>
+      </div>
+      <div class="terminal-body">
+        <div><span class="prompt">C:\dev&gt; </span><span class="cmd">wmux new</span></div>
+        <div><span class="output">Created session: 1</span></div>
+        <div><span class="prompt">C:\dev&gt; </span><span class="cmd">wmux attach</span></div>
+        <div><span class="success">[wmux] attached to session 1 (Ctrl+B d to detach)</span></div>
+        <div><span class="prompt">C:\dev&gt; </span><span class="text">npm run build &amp;&amp; npm start</span></div>
+        <div><span class="success">close terminal, come back later, reattach. it's still running.</span></div>
+      </div>
+      <div class="status-bar">[wmux] session:1 | panes:1 | Ctrl+B d:detach</div>
+    </div>
+
+    <div class="bottom">
+      <div class="install-badge">cargo install wmux</div>
+      <div class="badges">
+        <div class="badge"><span class="icon">&#9679;</span> Open Source</div>
+        <div class="badge"><span class="icon">&#9679;</span> MIT / Apache-2.0</div>
+        <div class="badge"><span class="icon">&#9679;</span> Windows 10+</div>
+      </div>
+      <div class="links">github.com/bahri-hirfanoglu/wmux</div>
+    </div>
+  </div>
+</body>
+</html>
