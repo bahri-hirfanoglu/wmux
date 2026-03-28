@@ -98,8 +98,8 @@ async fn handle_connection(
     info!("Received request: {:?}", request);
 
     // Check if this is an attach request — it needs special long-lived handling
-    if let Request::AttachSession { session_id } = request {
-        return handle_attach(reader, writer, session_id, session_manager).await;
+    if let Request::AttachSession { session_id, cols, rows } = request {
+        return handle_attach(reader, writer, session_id, cols, rows, session_manager).await;
     }
 
     let response = match request {
@@ -232,6 +232,8 @@ async fn handle_attach<R, W>(
     reader: R,
     mut writer: W,
     session_id: String,
+    client_cols: i16,
+    client_rows: i16,
     session_manager: Arc<Mutex<SessionManager>>,
 ) -> Result<()>
 where
@@ -302,18 +304,17 @@ where
         }
     };
 
-    // 4. Force screen redraw by triggering a resize event on ConPTY.
-    //    This makes TUI apps (like Claude) re-render their full screen.
-    //    We resize to (cols-1, rows), then back to (cols, rows).
+    // 4. Resize ConPTY to client terminal size minus 1 row (for status bar).
+    //    The double resize (shrink then target) forces TUI apps to redraw.
     {
+        let target_rows = client_rows - 1; // reserve last row for status bar
         let mut mgr = session_manager.lock().await;
         if let Some(pane) = mgr.get_active_pane_mut(&session_id) {
-            let cols = pane.conpty().cols();
-            let rows = pane.conpty().rows();
-            // Shrink by 1 col, then restore — triggers SIGWINCH-equivalent
-            let _ = pane.conpty_mut().resize(cols - 1, rows);
-            let _ = pane.conpty_mut().resize(cols, rows);
-            info!("Triggered resize redraw for session {} ({}x{})", session_id, cols, rows);
+            // Shrink by 1 col first to force redraw, then set actual size
+            let _ = pane.conpty_mut().resize(client_cols - 1, target_rows);
+            let _ = pane.conpty_mut().resize(client_cols, target_rows);
+            info!("Resized ConPTY for session {} to {}x{} (client {}x{}, -1 row for status bar)",
+                session_id, client_cols, target_rows, client_cols, client_rows);
         }
     }
 

@@ -26,7 +26,7 @@ pub enum Request {
     KillServer,
     NewSession { name: Option<String> },
     ListSessions,
-    AttachSession { session_id: String },
+    AttachSession { session_id: String, cols: i16, rows: i16 },
     DetachSession { session_id: String },
     KillSession { id: String },
     SplitPane { session_id: String, direction: SplitDirection },
