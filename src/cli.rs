@@ -34,6 +34,10 @@ pub enum Commands {
     Attach {
         /// Session ID to attach to (attaches to most recent if omitted)
         session_id: Option<String>,
+
+        /// Target a specific pane (used internally by split to attach new WT pane to daemon pane)
+        #[arg(long)]
+        pane: Option<u32>,
     },
 
     /// Detach from the current session
