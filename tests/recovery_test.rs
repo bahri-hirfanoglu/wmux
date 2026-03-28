@@ -18,6 +18,7 @@ fn cleanup(dir: &PathBuf) {
 }
 
 fn sample_state() -> PersistedState {
+    use wmux::daemon::recovery::PersistedPane;
     PersistedState {
         version: 1,
         sessions: vec![
@@ -29,6 +30,13 @@ fn sample_state() -> PersistedState {
                 shell: "powershell.exe".to_string(),
                 cols: 120,
                 rows: 30,
+                panes: vec![PersistedPane {
+                    id: 0,
+                    pid: 1234,
+                    shell: "powershell.exe".to_string(),
+                    cols: 120,
+                    rows: 30,
+                }],
             },
             PersistedSession {
                 id: "2".to_string(),
@@ -38,6 +46,13 @@ fn sample_state() -> PersistedState {
                 shell: "cmd.exe".to_string(),
                 cols: 80,
                 rows: 24,
+                panes: vec![PersistedPane {
+                    id: 0,
+                    pid: 5678,
+                    shell: "cmd.exe".to_string(),
+                    cols: 80,
+                    rows: 24,
+                }],
             },
         ],
         next_id: 3,
