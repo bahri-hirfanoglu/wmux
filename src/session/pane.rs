@@ -3,6 +3,7 @@ use std::time::SystemTime;
 use anyhow::{Context, Result};
 
 use super::conpty::ConPtySession;
+use super::scrollback::ScrollbackBuffer;
 
 /// A single pane within a session, owning its own ConPTY process.
 pub struct Pane {
@@ -14,6 +15,8 @@ pub struct Pane {
     created_at: SystemTime,
     /// Whether this pane is the currently focused pane in the session.
     active: bool,
+    /// Scrollback buffer for terminal output history.
+    scrollback: ScrollbackBuffer,
 }
 
 impl Pane {
@@ -27,6 +30,7 @@ impl Pane {
             conpty,
             created_at: SystemTime::now(),
             active: id == 0, // First pane is active by default
+            scrollback: ScrollbackBuffer::new(10_000),
         })
     }
 
@@ -37,6 +41,7 @@ impl Pane {
             conpty,
             created_at: SystemTime::now(),
             active: id == 0,
+            scrollback: ScrollbackBuffer::new(10_000),
         }
     }
 
@@ -83,6 +88,16 @@ impl Pane {
     /// When this pane was created.
     pub fn created_at(&self) -> SystemTime {
         self.created_at
+    }
+
+    /// Get a reference to the pane's scrollback buffer.
+    pub fn scrollback(&self) -> &ScrollbackBuffer {
+        &self.scrollback
+    }
+
+    /// Get a mutable reference to the pane's scrollback buffer.
+    pub fn scrollback_mut(&mut self) -> &mut ScrollbackBuffer {
+        &mut self.scrollback
     }
 }
 
