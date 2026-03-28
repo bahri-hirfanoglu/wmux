@@ -127,8 +127,16 @@ pub async fn run_daemon() -> Result<()> {
 
     info!("wmux daemon started (pid: {})", pid);
 
+    // Load configuration
+    let config_path = crate::paths::config_file()?;
+    let config = crate::config::load_config(&config_path)?;
+    info!("Config loaded from {}", config_path.display());
+    if let Some(ref shell) = config.default_shell {
+        info!("Default shell: {}", shell);
+    }
+
     // Create session manager
-    let mut manager = crate::session::SessionManager::new();
+    let mut manager = crate::session::SessionManager::new(config.default_shell);
 
     // Attempt crash recovery: load persisted state and recover sessions
     match crate::daemon::recovery::load_state() {

@@ -24,13 +24,16 @@ pub struct Session {
 pub struct SessionManager {
     sessions: HashMap<String, Session>,
     next_id: u32,
+    /// Default shell from config, used when no explicit shell is specified.
+    default_shell: Option<String>,
 }
 
 impl SessionManager {
-    pub fn new() -> Self {
+    pub fn new(default_shell: Option<String>) -> Self {
         SessionManager {
             sessions: HashMap::new(),
             next_id: 1,
+            default_shell,
         }
     }
 
@@ -39,7 +42,7 @@ impl SessionManager {
         let id = self.next_id.to_string();
         self.next_id += 1;
 
-        let pane = Pane::new(0, 120, 30, None)
+        let pane = Pane::new(0, 120, 30, self.default_shell.as_deref())
             .with_context(|| format!("Failed to create default pane for session {}", id))?;
 
         let created_at = SystemTime::now();
@@ -125,7 +128,8 @@ impl SessionManager {
             .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
 
         let next_pane_id = session.panes.iter().map(|p| p.id()).max().unwrap_or(0) + 1;
-        let pane = Pane::new(next_pane_id, cols, rows, shell)
+        let effective_shell = shell.or(self.default_shell.as_deref());
+        let pane = Pane::new(next_pane_id, cols, rows, effective_shell)
             .with_context(|| format!("Failed to create pane {} in session {}", next_pane_id, session_id))?;
 
         let pid = pane.process_id();
