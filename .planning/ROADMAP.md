@@ -31,10 +31,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 4/4 plans complete
 
 Plans:
-- [ ] 01-01-PLAN.md — Project scaffold, CLI, and daemon lifecycle (start/stop/status)
-- [ ] 01-02-PLAN.md — Named Pipe IPC protocol and client-daemon communication
-- [ ] 01-03-PLAN.md — ConPTY shell spawning and session management
-- [ ] 01-04-PLAN.md — Crash recovery with state persistence
+- [x] 01-01-PLAN.md — Project scaffold, CLI, and daemon lifecycle (start/stop/status)
+- [x] 01-02-PLAN.md — Named Pipe IPC protocol and client-daemon communication
+- [x] 01-03-PLAN.md — ConPTY shell spawning and session management
+- [x] 01-04-PLAN.md — Crash recovery with state persistence
 
 ### Phase 2: Session and Pane Core
 **Goal**: Users can create, manage, and persist terminal sessions with multiple panes through the wmux CLI and Windows Terminal
@@ -46,7 +46,14 @@ Plans:
   3. User can split a pane horizontally with `wmux split -h` and vertically with `wmux split -v`, producing independent shell processes in each pane via ConPTY
   4. User can navigate between panes and resize them via keybindings, and close a pane with `wmux kill-pane`
   5. User can scroll back through pane output history
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Protocol extension, Pane model, WT detection, CLI updates
+- [ ] 02-02-PLAN.md — Attach/detach with bidirectional I/O streaming
+- [ ] 02-03-PLAN.md — Pane splitting via wt.exe and kill-pane
+- [ ] 02-04-PLAN.md — Keybinding system with pane navigation and resize
+- [ ] 02-05-PLAN.md — Scrollback buffer and scroll mode
 
 ### Phase 3: Configuration and Polish
 **Goal**: wmux is configurable via TOML and presents a professional CLI surface ready for public distribution
@@ -66,5 +73,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Daemon Foundation | 4/4 | Complete   | 2026-03-28 |
-| 2. Session and Pane Core | 0/TBD | Not started | - |
+| 2. Session and Pane Core | 0/5 | Planned | - |
 | 3. Configuration and Polish | 0/TBD | Not started | - |
