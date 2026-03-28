@@ -17,18 +17,18 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Session
 
 - [x] **SESS-01**: User can create a new session with `wmux new`
-- [ ] **SESS-02**: User can list all active sessions with `wmux ls`
+- [x] **SESS-02**: User can list all active sessions with `wmux ls`
 - [x] **SESS-03**: User can attach to an existing session with `wmux attach`
 - [x] **SESS-04**: User can detach from a session with `wmux detach` or keybinding
-- [ ] **SESS-05**: User can kill a session with `wmux kill-session`
+- [x] **SESS-05**: User can kill a session with `wmux kill-session`
 - [x] **SESS-06**: Sessions persist after client disconnects — processes keep running in daemon
 
 ### Pane
 
 - [x] **PANE-01**: User can split current pane horizontally with `wmux split -h`
 - [x] **PANE-02**: User can split current pane vertically with `wmux split -v`
-- [ ] **PANE-03**: User can navigate between panes with keybindings
-- [ ] **PANE-04**: User can resize panes with keybindings
+- [x] **PANE-03**: User can navigate between panes with keybindings
+- [x] **PANE-04**: User can resize panes with keybindings
 - [x] **PANE-05**: Each pane runs an independent shell process via ConPTY
 - [x] **PANE-06**: User can close a pane with `wmux kill-pane`
 - [ ] **PANE-07**: User can scroll back through pane output history
@@ -104,15 +104,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLI-01 | Phase 1 | Complete |
 | INTG-03 | Phase 1 | Complete |
 | SESS-01 | Phase 2 | Complete |
-| SESS-02 | Phase 2 | Pending |
+| SESS-02 | Phase 2 | Complete |
 | SESS-03 | Phase 2 | Complete |
 | SESS-04 | Phase 2 | Complete |
-| SESS-05 | Phase 2 | Pending |
+| SESS-05 | Phase 2 | Complete |
 | SESS-06 | Phase 2 | Complete |
 | PANE-01 | Phase 2 | Complete |
 | PANE-02 | Phase 2 | Complete |
-| PANE-03 | Phase 2 | Pending |
-| PANE-04 | Phase 2 | Pending |
+| PANE-03 | Phase 2 | Complete |
+| PANE-04 | Phase 2 | Complete |
 | PANE-05 | Phase 2 | Complete |
 | PANE-06 | Phase 2 | Complete |
 | PANE-07 | Phase 2 | Pending |

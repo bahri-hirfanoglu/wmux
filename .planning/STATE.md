@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-03-PLAN.md
-last_updated: "2026-03-28T16:35:49Z"
-last_activity: 2026-03-28 — Completed 02-03 Pane Splitting and Lifecycle
+stopped_at: Completed 02-04-PLAN.md
+last_updated: "2026-03-28T16:45:32Z"
+last_activity: 2026-03-28 — Completed 02-04 Pane Navigation and Keybindings
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
-  percent: 78
+  completed_plans: 8
+  percent: 89
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 2 of 3 (Session and Pane Core)
-Plan: 3 of 5 in current phase -- COMPLETE
+Plan: 4 of 5 in current phase -- COMPLETE
 Status: Executing
-Last activity: 2026-03-28 — Completed 02-03 Pane Splitting and Lifecycle
+Last activity: 2026-03-28 — Completed 02-04 Pane Navigation and Keybindings
 
-Progress: [██████----] 60% (Phase 2)
+Progress: [████████--] 80% (Phase 2)
 
 ## Performance Metrics
 
@@ -56,6 +56,7 @@ Progress: [██████----] 60% (Phase 2)
 | Phase 02 P01 | 5min | 2 tasks | 11 files |
 | Phase 02 P02 | 8min | 2 tasks | 9 files |
 | Phase 02 P03 | 9min | 2 tasks | 3 files |
+| Phase 02 P04 | 6min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,10 @@ Recent decisions affecting current work:
 - [Phase 02-03]: WMUX_SESSION_ID env var for session context propagation between attach and split/kill-pane
 - [Phase 02-03]: Split flow: daemon creates ConPTY pane first, then wt.exe split-pane runs wmux attach targeting new pane
 - [Phase 02-03]: WMUX_PANE_ID env var tracks current pane for kill-pane default target
+- [Phase 02-04]: Prefix key escape sequence parsing for arrows (ESC [ A-D) and Alt+arrows (ESC [ 1;3 A-D)
+- [Phase 02-04]: NavigatePane uses index-based directional wrapping (daemon has no WT spatial layout knowledge)
+- [Phase 02-04]: wt_move_focus/wt_resize_pane graceful fallback on older WT versions lacking experimental commands
+- [Phase 02-04]: Inline attach command dispatch for NavigatePane/SplitPane/KillPane/ResizePane during streaming
 
 ### Pending Todos
 
@@ -102,7 +107,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T16:35:49Z
-Stopped at: Completed 02-03-PLAN.md
-Resume file: .planning/phases/02-session-and-pane-core/02-03-SUMMARY.md
-Resume file: None
+Last session: 2026-03-28T16:45:32Z
+Stopped at: Completed 02-04-PLAN.md
+Resume file: .planning/phases/02-session-and-pane-core/02-04-SUMMARY.md
