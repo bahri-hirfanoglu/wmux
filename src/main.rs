@@ -99,12 +99,75 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Some(Commands::Attach)
-        | Some(Commands::Detach)
-        | Some(Commands::KillPane)
-        | Some(Commands::Split) => {
-            eprintln!("Not yet implemented");
+        Some(Commands::Attach { session_id: _ }) => {
+            wmux::wt::require_windows_terminal()?;
+            eprintln!("attach/detach not yet wired");
             std::process::exit(1);
+        }
+        Some(Commands::Detach) => {
+            eprintln!("attach/detach not yet wired");
+            std::process::exit(1);
+        }
+        Some(Commands::Split { horizontal, vertical }) => {
+            wmux::wt::require_windows_terminal()?;
+            if !horizontal && !vertical {
+                eprintln!("Error: specify --horizontal (-h) or --vertical (-v)");
+                std::process::exit(1);
+            }
+            let direction = if horizontal {
+                wmux::ipc::protocol::SplitDirection::Horizontal
+            } else {
+                wmux::ipc::protocol::SplitDirection::Vertical
+            };
+            let pipe_name = paths::control_pipe();
+            // For now, use session "1" as placeholder — proper session context comes in Plan 02
+            let request = wmux::ipc::protocol::Request::SplitPane {
+                session_id: "1".to_string(),
+                direction,
+            };
+            match wmux::ipc::client::send_request(&pipe_name, &request).await {
+                Ok(wmux::ipc::protocol::Response::PaneInfo { session_id, pane_id, pid }) => {
+                    println!("Split pane created: session={}, pane={}, pid={}", session_id, pane_id, pid);
+                }
+                Ok(wmux::ipc::protocol::Response::Error { message }) => {
+                    eprintln!("Error: {}", message);
+                    std::process::exit(1);
+                }
+                Ok(other) => {
+                    eprintln!("Unexpected response: {:?}", other);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("Failed to split pane: {}. Is the daemon running?", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some(Commands::KillPane { pane_id }) => {
+            wmux::wt::require_windows_terminal()?;
+            let pipe_name = paths::control_pipe();
+            // For now, use session "1" as placeholder and active pane (0) if none specified
+            let request = wmux::ipc::protocol::Request::KillPane {
+                session_id: "1".to_string(),
+                pane_id: pane_id.unwrap_or(0),
+            };
+            match wmux::ipc::client::send_request(&pipe_name, &request).await {
+                Ok(wmux::ipc::protocol::Response::Ok { message }) => {
+                    println!("{}", message);
+                }
+                Ok(wmux::ipc::protocol::Response::Error { message }) => {
+                    eprintln!("Error: {}", message);
+                    std::process::exit(1);
+                }
+                Ok(other) => {
+                    eprintln!("Unexpected response: {:?}", other);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("Failed to kill pane: {}. Is the daemon running?", e);
+                    std::process::exit(1);
+                }
+            }
         }
         None => {
             // No subcommand — print help

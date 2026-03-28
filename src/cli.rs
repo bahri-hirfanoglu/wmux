@@ -31,7 +31,10 @@ pub enum Commands {
     Ls,
 
     /// Attach to a session
-    Attach,
+    Attach {
+        /// Session ID to attach to (attaches to most recent if omitted)
+        session_id: Option<String>,
+    },
 
     /// Detach from the current session
     Detach,
@@ -45,8 +48,20 @@ pub enum Commands {
 
     /// Kill a pane
     #[command(name = "kill-pane")]
-    KillPane,
+    KillPane {
+        /// Pane ID to kill (kills active pane if omitted)
+        #[arg(long)]
+        pane_id: Option<u32>,
+    },
 
     /// Split current pane
-    Split,
+    Split {
+        /// Split horizontally
+        #[arg(short = 'h', long = "horizontal")]
+        horizontal: bool,
+
+        /// Split vertically
+        #[arg(short = 'v', long = "vertical")]
+        vertical: bool,
+    },
 }
