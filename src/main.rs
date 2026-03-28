@@ -99,13 +99,48 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Some(Commands::Attach { session_id: _ }) => {
+        Some(Commands::Attach { session_id }) => {
             wmux::wt::require_windows_terminal()?;
-            eprintln!("attach/detach not yet wired");
-            std::process::exit(1);
+            let pipe_name = paths::control_pipe();
+
+            // If no session_id given, find the most recent session
+            let sid = if let Some(id) = session_id {
+                id
+            } else {
+                // Query the daemon for sessions and pick the most recent
+                let request = wmux::ipc::protocol::Request::ListSessions;
+                match wmux::ipc::client::send_request(&pipe_name, &request).await {
+                    Ok(wmux::ipc::protocol::Response::SessionList { sessions }) => {
+                        if sessions.is_empty() {
+                            eprintln!("No active sessions to attach to");
+                            std::process::exit(1);
+                        }
+                        // Pick the last one (most recently created)
+                        sessions.last().unwrap().id.clone()
+                    }
+                    Ok(other) => {
+                        eprintln!("Unexpected response: {:?}", other);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to list sessions: {}. Is the daemon running?", e);
+                        std::process::exit(1);
+                    }
+                }
+            };
+
+            match wmux::ipc::client::attach_session(&pipe_name, &sid).await {
+                Ok(()) => {
+                    println!("Detached from session {}", sid);
+                }
+                Err(e) => {
+                    eprintln!("Attach failed: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
         Some(Commands::Detach) => {
-            eprintln!("attach/detach not yet wired");
+            eprintln!("Detach is handled via Ctrl+B, d while attached to a session");
             std::process::exit(1);
         }
         Some(Commands::Split { horizontal, vertical }) => {
