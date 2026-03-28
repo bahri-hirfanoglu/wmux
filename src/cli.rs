@@ -94,7 +94,7 @@ pub enum Commands {
         Also available via keybinding: Ctrl+B, \" (horizontal) or Ctrl+B, % (vertical).")]
     Split {
         /// Split horizontally (top/bottom)
-        #[arg(short = 'h', long = "horizontal")]
+        #[arg(short = 'H', long = "horizontal")]
         horizontal: bool,
 
         /// Split vertically (left/right)

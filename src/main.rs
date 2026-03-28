@@ -6,6 +6,15 @@ use cli::{Cli, Commands};
 use wmux::daemon;
 use wmux::paths;
 
+/// Print an error message to stderr and exit with the given code.
+fn exit_error(message: &str, hint: Option<&str>, code: i32) -> ! {
+    eprintln!("error: {}", message);
+    if let Some(h) = hint {
+        eprintln!("hint: {}", h);
+    }
+    std::process::exit(code);
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -18,13 +27,31 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Some(Commands::DaemonStart) => {
-            daemon::lifecycle::start_daemon().await?;
+            if let Err(e) = daemon::lifecycle::start_daemon().await {
+                exit_error(
+                    &format!("failed to start daemon: {}", e),
+                    Some("Check if another daemon is already running with 'wmux status'"),
+                    1,
+                );
+            }
         }
         Some(Commands::Status) => {
-            daemon::lifecycle::daemon_status().await?;
+            if let Err(e) = daemon::lifecycle::daemon_status().await {
+                exit_error(
+                    &format!("failed to get status: {}", e),
+                    Some("Run 'wmux daemon-start' to start the daemon"),
+                    1,
+                );
+            }
         }
         Some(Commands::KillServer) => {
-            daemon::lifecycle::kill_server().await?;
+            if let Err(e) = daemon::lifecycle::kill_server().await {
+                exit_error(
+                    &format!("failed to stop daemon: {}", e),
+                    Some("Run 'wmux daemon-start' to start the daemon"),
+                    1,
+                );
+            }
         }
         Some(Commands::New) => {
             let pipe_name = paths::control_pipe();
@@ -34,16 +61,21 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", message);
                 }
                 Ok(wmux::ipc::protocol::Response::Error { message }) => {
-                    eprintln!("Error: {}", message);
-                    std::process::exit(1);
+                    exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    eprintln!("Unexpected response: {:?}", other);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("unexpected response: {:?}", other),
+                        None,
+                        1,
+                    );
                 }
                 Err(e) => {
-                    eprintln!("Failed to create session: {}. Is the daemon running?", e);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("failed to create session: {}", e),
+                        Some("Run 'wmux daemon-start' to start the daemon"),
+                        1,
+                    );
                 }
             }
         }
@@ -69,12 +101,18 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 Ok(other) => {
-                    eprintln!("Unexpected response: {:?}", other);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("unexpected response: {:?}", other),
+                        None,
+                        1,
+                    );
                 }
                 Err(e) => {
-                    eprintln!("Failed to list sessions: {}. Is the daemon running?", e);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("failed to list sessions: {}", e),
+                        Some("Run 'wmux daemon-start' to start the daemon"),
+                        1,
+                    );
                 }
             }
         }
@@ -86,21 +124,32 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", message);
                 }
                 Ok(wmux::ipc::protocol::Response::Error { message }) => {
-                    eprintln!("Error: {}", message);
-                    std::process::exit(1);
+                    exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    eprintln!("Unexpected response: {:?}", other);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("unexpected response: {:?}", other),
+                        None,
+                        1,
+                    );
                 }
                 Err(e) => {
-                    eprintln!("Failed to kill session: {}. Is the daemon running?", e);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("failed to kill session: {}", e),
+                        Some("Run 'wmux daemon-start' to start the daemon"),
+                        1,
+                    );
                 }
             }
         }
         Some(Commands::Attach { session_id, pane }) => {
-            wmux::wt::require_windows_terminal()?;
+            if let Err(e) = wmux::wt::require_windows_terminal() {
+                exit_error(
+                    &format!("Windows Terminal is required: {}", e),
+                    Some("Install Windows Terminal from the Microsoft Store, or run wmux from within Windows Terminal"),
+                    1,
+                );
+            }
             let pipe_name = paths::control_pipe();
 
             // If no session_id given, find the most recent session
@@ -112,19 +161,28 @@ async fn main() -> anyhow::Result<()> {
                 match wmux::ipc::client::send_request(&pipe_name, &request).await {
                     Ok(wmux::ipc::protocol::Response::SessionList { sessions }) => {
                         if sessions.is_empty() {
-                            eprintln!("No active sessions to attach to");
-                            std::process::exit(1);
+                            exit_error(
+                                "no active sessions to attach to",
+                                Some("Run 'wmux new' to create a session"),
+                                1,
+                            );
                         }
                         // Pick the last one (most recently created)
                         sessions.last().unwrap().id.clone()
                     }
                     Ok(other) => {
-                        eprintln!("Unexpected response: {:?}", other);
-                        std::process::exit(1);
+                        exit_error(
+                            &format!("unexpected response: {:?}", other),
+                            None,
+                            1,
+                        );
                     }
                     Err(e) => {
-                        eprintln!("Failed to list sessions: {}. Is the daemon running?", e);
-                        std::process::exit(1);
+                        exit_error(
+                            &format!("failed to list sessions: {}", e),
+                            Some("Run 'wmux daemon-start' to start the daemon"),
+                            1,
+                        );
                     }
                 }
             };
@@ -141,28 +199,46 @@ async fn main() -> anyhow::Result<()> {
                     println!("Detached from session {}", sid);
                 }
                 Err(e) => {
-                    eprintln!("Attach failed: {}", e);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("attach failed: {}", e),
+                        Some("Run 'wmux ls' to see active sessions"),
+                        1,
+                    );
                 }
             }
         }
         Some(Commands::Detach) => {
-            eprintln!("Detach is handled via Ctrl+B, d while attached to a session");
-            std::process::exit(1);
+            exit_error(
+                "detach is performed via the Ctrl+B, d keybinding while attached to a session",
+                Some("Attach to a session first with 'wmux attach', then press Ctrl+B, d to detach"),
+                2,
+            );
         }
         Some(Commands::Split { horizontal, vertical }) => {
-            wmux::wt::require_windows_terminal()?;
+            if let Err(e) = wmux::wt::require_windows_terminal() {
+                exit_error(
+                    &format!("Windows Terminal is required: {}", e),
+                    Some("Install Windows Terminal from the Microsoft Store, or run wmux from within Windows Terminal"),
+                    1,
+                );
+            }
             if !horizontal && !vertical {
-                eprintln!("Error: specify --horizontal (-h) or --vertical (-v)");
-                std::process::exit(1);
+                exit_error(
+                    "no split direction specified",
+                    Some("Use -H for horizontal or -v for vertical"),
+                    2,
+                );
             }
 
             // Get session ID from env var set during attach
             let session_id = match std::env::var("WMUX_SESSION_ID") {
                 Ok(id) => id,
                 Err(_) => {
-                    eprintln!("Error: not attached to a session — run wmux split from within an attached session");
-                    std::process::exit(1);
+                    exit_error(
+                        "not attached to a session",
+                        Some("This command must be run from within an attached session"),
+                        1,
+                    );
                 }
             };
 
@@ -192,35 +268,52 @@ async fn main() -> anyhow::Result<()> {
 
                     // Create the WT split pane running the attach command
                     if let Err(e) = wmux::wt::wt_split_pane(direction_str, &attach_cmd) {
-                        eprintln!("Error creating WT split pane: {}", e);
-                        std::process::exit(1);
+                        exit_error(
+                            &format!("failed to create WT split pane: {}", e),
+                            Some("Ensure Windows Terminal is running and supports split-pane"),
+                            1,
+                        );
                     }
 
                     println!("Split pane {} created", pane_id);
                 }
                 Ok(wmux::ipc::protocol::Response::Error { message }) => {
-                    eprintln!("Error: {}", message);
-                    std::process::exit(1);
+                    exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    eprintln!("Unexpected response: {:?}", other);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("unexpected response: {:?}", other),
+                        None,
+                        1,
+                    );
                 }
                 Err(e) => {
-                    eprintln!("Failed to split pane: {}. Is the daemon running?", e);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("failed to split pane: {}", e),
+                        Some("Run 'wmux daemon-start' to start the daemon"),
+                        1,
+                    );
                 }
             }
         }
         Some(Commands::KillPane { pane_id }) => {
-            wmux::wt::require_windows_terminal()?;
+            if let Err(e) = wmux::wt::require_windows_terminal() {
+                exit_error(
+                    &format!("Windows Terminal is required: {}", e),
+                    Some("Install Windows Terminal from the Microsoft Store, or run wmux from within Windows Terminal"),
+                    1,
+                );
+            }
 
             // Get session ID from env var set during attach
             let session_id = match std::env::var("WMUX_SESSION_ID") {
                 Ok(id) => id,
                 Err(_) => {
-                    eprintln!("Error: not attached to a session — run wmux kill-pane from within an attached session");
-                    std::process::exit(1);
+                    exit_error(
+                        "not attached to a session",
+                        Some("This command must be run from within an attached session"),
+                        1,
+                    );
                 }
             };
 
@@ -242,16 +335,21 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", message);
                 }
                 Ok(wmux::ipc::protocol::Response::Error { message }) => {
-                    eprintln!("Error: {}", message);
-                    std::process::exit(1);
+                    exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    eprintln!("Unexpected response: {:?}", other);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("unexpected response: {:?}", other),
+                        None,
+                        1,
+                    );
                 }
                 Err(e) => {
-                    eprintln!("Failed to kill pane: {}. Is the daemon running?", e);
-                    std::process::exit(1);
+                    exit_error(
+                        &format!("failed to kill pane: {}", e),
+                        Some("Run 'wmux daemon-start' to start the daemon"),
+                        1,
+                    );
                 }
             }
         }
