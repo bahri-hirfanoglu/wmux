@@ -24,20 +24,56 @@ pub enum Request {
     Ping,
     Status,
     KillServer,
-    NewSession { name: Option<String> },
+    NewSession {
+        name: Option<String>,
+    },
     ListSessions,
-    AttachSession { session_id: String, cols: i16, rows: i16 },
-    DetachSession { session_id: String },
-    KillSession { id: String },
-    SplitPane { session_id: String, direction: SplitDirection },
-    KillPane { session_id: String, pane_id: u32 },
-    NavigatePane { session_id: String, direction: NavDirection },
-    ResizePane { session_id: String, pane_id: u32, cols: i16, rows: i16 },
-    ScrollBack { session_id: String, pane_id: u32, lines: i32 },
-    EnterScrollMode { session_id: String, pane_id: u32 },
-    ExitScrollMode { session_id: String, pane_id: u32 },
+    AttachSession {
+        session_id: String,
+        cols: i16,
+        rows: i16,
+    },
+    DetachSession {
+        session_id: String,
+    },
+    KillSession {
+        id: String,
+    },
+    SplitPane {
+        session_id: String,
+        direction: SplitDirection,
+    },
+    KillPane {
+        session_id: String,
+        pane_id: u32,
+    },
+    NavigatePane {
+        session_id: String,
+        direction: NavDirection,
+    },
+    ResizePane {
+        session_id: String,
+        pane_id: u32,
+        cols: i16,
+        rows: i16,
+    },
+    ScrollBack {
+        session_id: String,
+        pane_id: u32,
+        lines: i32,
+    },
+    EnterScrollMode {
+        session_id: String,
+        pane_id: u32,
+    },
+    ExitScrollMode {
+        session_id: String,
+        pane_id: u32,
+    },
     /// Raw input data from an attached client to forward to ConPTY stdin.
-    SessionInput { data: Vec<u8> },
+    SessionInput {
+        data: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

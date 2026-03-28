@@ -19,9 +19,7 @@ pub fn is_windows_terminal() -> bool {
 /// a clear message directing the user to use Windows Terminal.
 pub fn require_windows_terminal() -> Result<()> {
     if !is_windows_terminal() {
-        bail!(
-            "wmux requires Windows Terminal. Please run wmux inside Windows Terminal (wt.exe)."
-        );
+        bail!("wmux requires Windows Terminal. Please run wmux inside Windows Terminal (wt.exe).");
     }
     Ok(())
 }
@@ -114,10 +112,13 @@ pub fn wt_move_focus(direction: &str) -> Result<()> {
 pub fn wt_resize_pane(direction: &str, amount: u32) -> Result<()> {
     let output = std::process::Command::new("wt.exe")
         .args([
-            "-w", "0",
+            "-w",
+            "0",
             "resize-pane",
-            "--direction", direction,
-            "--amount", &amount.to_string(),
+            "--direction",
+            direction,
+            "--amount",
+            &amount.to_string(),
         ])
         .output()
         .context("Failed to execute wt.exe resize-pane. Is Windows Terminal installed?")?;

@@ -98,7 +98,12 @@ async fn handle_connection(
     info!("Received request: {:?}", request);
 
     // Check if this is an attach request — it needs special long-lived handling
-    if let Request::AttachSession { session_id, cols, rows } = request {
+    if let Request::AttachSession {
+        session_id,
+        cols,
+        rows,
+    } = request
+    {
         return handle_attach(reader, writer, session_id, cols, rows, session_manager).await;
     }
 
@@ -133,7 +138,7 @@ async fn handle_connection(
                     Response::Ok {
                         message: format!("Created session: {}", sid),
                     }
-                },
+                }
                 Err(e) => Response::Error {
                     message: format!("Failed to create session: {}", e),
                 },
@@ -156,7 +161,10 @@ async fn handle_connection(
                 },
             }
         }
-        Request::SplitPane { session_id, direction: _direction } => {
+        Request::SplitPane {
+            session_id,
+            direction: _direction,
+        } => {
             let mut mgr = session_manager.lock().await;
             match mgr.add_pane(&session_id, 120, 30, None) {
                 Ok(pane_info) => Response::PaneInfo {
@@ -169,7 +177,10 @@ async fn handle_connection(
                 },
             }
         }
-        Request::KillPane { session_id, pane_id } => {
+        Request::KillPane {
+            session_id,
+            pane_id,
+        } => {
             let mut mgr = session_manager.lock().await;
             match mgr.kill_pane(&session_id, pane_id) {
                 Ok(()) => Response::Ok {
@@ -180,7 +191,12 @@ async fn handle_connection(
                 },
             }
         }
-        Request::ResizePane { session_id, pane_id, cols, rows } => {
+        Request::ResizePane {
+            session_id,
+            pane_id,
+            cols,
+            rows,
+        } => {
             let mut mgr = session_manager.lock().await;
             match mgr.resize_pane(&session_id, pane_id, cols, rows) {
                 Ok(()) => Response::Ok {
@@ -191,25 +207,35 @@ async fn handle_connection(
                 },
             }
         }
-        Request::EnterScrollMode { session_id, pane_id } => {
+        Request::EnterScrollMode {
+            session_id,
+            pane_id,
+        } => {
             let mgr = session_manager.lock().await;
-            build_scroll_response(&mgr, &session_id, pane_id, None)
-                .unwrap_or_else(|| Response::Error {
+            build_scroll_response(&mgr, &session_id, pane_id, None).unwrap_or_else(|| {
+                Response::Error {
                     message: format!("Pane {} not found in session '{}'", pane_id, session_id),
-                })
+                }
+            })
         }
-        Request::ScrollBack { session_id, pane_id, lines } => {
+        Request::ScrollBack {
+            session_id,
+            pane_id,
+            lines,
+        } => {
             let mgr = session_manager.lock().await;
-            build_scroll_response(&mgr, &session_id, pane_id, Some(lines))
-                .unwrap_or_else(|| Response::Error {
+            build_scroll_response(&mgr, &session_id, pane_id, Some(lines)).unwrap_or_else(|| {
+                Response::Error {
                     message: format!("Pane {} not found in session '{}'", pane_id, session_id),
-                })
+                }
+            })
         }
-        Request::ExitScrollMode { session_id: _, pane_id: _ } => {
-            Response::Ok {
-                message: "Exited scroll mode".to_string(),
-            }
-        }
+        Request::ExitScrollMode {
+            session_id: _,
+            pane_id: _,
+        } => Response::Ok {
+            message: "Exited scroll mode".to_string(),
+        },
         // AttachSession is handled above, but the compiler needs this arm
         Request::AttachSession { .. } => unreachable!(),
         _ => Response::Error {
@@ -252,7 +278,11 @@ where
         let session = match mgr.get_session_mut(&session_id) {
             Some(s) => s,
             None => {
-                return send_error_and_return(&mut writer, format!("Session '{}' not found", session_id)).await;
+                return send_error_and_return(
+                    &mut writer,
+                    format!("Session '{}' not found", session_id),
+                )
+                .await;
             }
         };
 
@@ -275,7 +305,8 @@ where
                 return send_error_and_return(
                     &mut writer,
                     format!("No active pane in session '{}'", session_id),
-                ).await;
+                )
+                .await;
             }
         }
     }; // mutex released here
@@ -295,11 +326,19 @@ where
             Some(session) => match &session.output_tx {
                 Some(tx) => tx.subscribe(),
                 None => {
-                    return send_error_and_return(&mut writer, format!("Session '{}' has no output channel", session_id)).await;
+                    return send_error_and_return(
+                        &mut writer,
+                        format!("Session '{}' has no output channel", session_id),
+                    )
+                    .await;
                 }
             },
             None => {
-                return send_error_and_return(&mut writer, format!("Session '{}' not found", session_id)).await;
+                return send_error_and_return(
+                    &mut writer,
+                    format!("Session '{}' not found", session_id),
+                )
+                .await;
             }
         }
     };
@@ -313,8 +352,10 @@ where
             // Shrink by 1 col first to force redraw, then set actual size
             let _ = pane.conpty_mut().resize(client_cols - 1, target_rows);
             let _ = pane.conpty_mut().resize(client_cols, target_rows);
-            info!("Resized ConPTY for session {} to {}x{} (client {}x{}, -1 row for status bar)",
-                session_id, client_cols, target_rows, client_cols, client_rows);
+            info!(
+                "Resized ConPTY for session {} to {}x{} (client {}x{}, -1 row for status bar)",
+                session_id, client_cols, target_rows, client_cols, client_rows
+            );
         }
     }
 
@@ -326,14 +367,9 @@ where
     let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<Request>(32);
     let client_reader = tokio::spawn(async move {
         let mut reader = reader;
-        loop {
-            match read_message::<_, Request>(&mut reader).await {
-                Ok(req) => {
-                    if client_tx.send(req).await.is_err() {
-                        break; // receiver dropped — attach ending
-                    }
-                }
-                Err(_) => break, // client disconnected
+        while let Ok(req) = read_message::<_, Request>(&mut reader).await {
+            if client_tx.send(req).await.is_err() {
+                break;
             }
         }
     });
@@ -483,9 +519,13 @@ where
     }
 
     // Try to send a final Ok response (may fail if client already disconnected)
-    let _ = write_message(&mut writer, &Response::Ok {
-        message: format!("Detached from session {}", session_id),
-    }).await;
+    let _ = write_message(
+        &mut writer,
+        &Response::Ok {
+            message: format!("Detached from session {}", session_id),
+        },
+    )
+    .await;
 
     info!("Attach handler finished for session {}", session_id);
     Ok(())
@@ -528,9 +568,7 @@ pub fn start_conpty_drain(
         loop {
             let mut buf = vec![0u8; 4096];
             let mut bytes_read: u32 = 0;
-            let result = unsafe {
-                ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
-            };
+            let result = unsafe { ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None) };
             match result {
                 Ok(()) if bytes_read > 0 => {
                     buf.truncate(bytes_read as usize);
@@ -546,7 +584,10 @@ pub fn start_conpty_drain(
                     let _ = output_tx.send(buf);
                 }
                 _ => {
-                    info!("ConPTY drain thread ending for session {} (pipe closed)", sid);
+                    info!(
+                        "ConPTY drain thread ending for session {} (pipe closed)",
+                        sid
+                    );
                     break;
                 }
             }

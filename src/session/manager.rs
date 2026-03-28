@@ -105,7 +105,12 @@ impl SessionManager {
             Some(mut session) => {
                 for pane in &mut session.panes {
                     if let Err(e) = pane.kill() {
-                        tracing::error!("Failed to kill pane {} in session {}: {}", pane.id(), id, e);
+                        tracing::error!(
+                            "Failed to kill pane {} in session {}: {}",
+                            pane.id(),
+                            id,
+                            e
+                        );
                     }
                 }
                 info!("Session killed: id={}", id);
@@ -136,11 +141,18 @@ impl SessionManager {
 
         let next_pane_id = session.panes.iter().map(|p| p.id()).max().unwrap_or(0) + 1;
         let effective_shell = shell.or(self.default_shell.as_deref());
-        let pane = Pane::new(next_pane_id, cols, rows, effective_shell)
-            .with_context(|| format!("Failed to create pane {} in session {}", next_pane_id, session_id))?;
+        let pane = Pane::new(next_pane_id, cols, rows, effective_shell).with_context(|| {
+            format!(
+                "Failed to create pane {} in session {}",
+                next_pane_id, session_id
+            )
+        })?;
 
         let pid = pane.process_id();
-        info!("Pane added: session={}, pane_id={}, pid={}", session_id, next_pane_id, pid);
+        info!(
+            "Pane added: session={}, pane_id={}, pid={}",
+            session_id, next_pane_id, pid
+        );
 
         session.panes.push(pane);
 
@@ -161,7 +173,9 @@ impl SessionManager {
                 .panes
                 .iter()
                 .position(|p| p.id() == pane_id)
-                .ok_or_else(|| anyhow::anyhow!("Pane {} not found in session '{}'", pane_id, session_id))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Pane {} not found in session '{}'", pane_id, session_id)
+                })?;
             session.panes.len() == 1
         };
 
@@ -171,7 +185,11 @@ impl SessionManager {
         }
 
         let session = self.sessions.get_mut(session_id).unwrap();
-        let pane_idx = session.panes.iter().position(|p| p.id() == pane_id).unwrap();
+        let pane_idx = session
+            .panes
+            .iter()
+            .position(|p| p.id() == pane_id)
+            .unwrap();
         let mut pane = session.panes.remove(pane_idx);
         pane.kill()?;
 
@@ -189,9 +207,9 @@ impl SessionManager {
 
     /// Get a reference to the active pane in a session.
     pub fn get_active_pane(&self, session_id: &str) -> Option<&Pane> {
-        self.sessions.get(session_id).and_then(|s| {
-            s.panes.iter().find(|p| p.id() == s.active_pane)
-        })
+        self.sessions
+            .get(session_id)
+            .and_then(|s| s.panes.iter().find(|p| p.id() == s.active_pane))
     }
 
     /// Get a mutable reference to the active pane in a session.
@@ -240,10 +258,15 @@ impl SessionManager {
             .panes
             .iter_mut()
             .find(|p| p.id() == pane_id)
-            .ok_or_else(|| anyhow::anyhow!("Pane {} not found in session '{}'", pane_id, session_id))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("Pane {} not found in session '{}'", pane_id, session_id)
+            })?;
 
         pane.conpty_mut().resize(cols, rows)?;
-        info!("Pane resized: session={}, pane_id={}, cols={}, rows={}", session_id, pane_id, cols, rows);
+        info!(
+            "Pane resized: session={}, pane_id={}, cols={}, rows={}",
+            session_id, pane_id, cols, rows
+        );
 
         Ok(())
     }
