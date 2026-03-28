@@ -16,7 +16,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Session
 
-- [ ] **SESS-01**: User can create a new session with `wmux new`
+- [x] **SESS-01**: User can create a new session with `wmux new`
 - [ ] **SESS-02**: User can list all active sessions with `wmux ls`
 - [ ] **SESS-03**: User can attach to an existing session with `wmux attach`
 - [ ] **SESS-04**: User can detach from a session with `wmux detach` or keybinding
@@ -29,7 +29,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PANE-02**: User can split current pane vertically with `wmux split -v`
 - [ ] **PANE-03**: User can navigate between panes with keybindings
 - [ ] **PANE-04**: User can resize panes with keybindings
-- [ ] **PANE-05**: Each pane runs an independent shell process via ConPTY
+- [x] **PANE-05**: Each pane runs an independent shell process via ConPTY
 - [ ] **PANE-06**: User can close a pane with `wmux kill-pane`
 - [ ] **PANE-07**: User can scroll back through pane output history
 
@@ -46,7 +46,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Integration
 
-- [ ] **INTG-01**: wmux leverages Windows Terminal Pane API for rendering
+- [x] **INTG-01**: wmux leverages Windows Terminal Pane API for rendering
 - [ ] **INTG-02**: Pane splits and layout are managed through WT's native pane system
 - [x] **INTG-03**: wmux works on Windows 10 1809+ (ConPTY requirement)
 
@@ -103,7 +103,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DAEMON-04 | Phase 1 | Complete |
 | CLI-01 | Phase 1 | Complete |
 | INTG-03 | Phase 1 | Complete |
-| SESS-01 | Phase 2 | Pending |
+| SESS-01 | Phase 2 | Complete |
 | SESS-02 | Phase 2 | Pending |
 | SESS-03 | Phase 2 | Pending |
 | SESS-04 | Phase 2 | Pending |
@@ -113,10 +113,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PANE-02 | Phase 2 | Pending |
 | PANE-03 | Phase 2 | Pending |
 | PANE-04 | Phase 2 | Pending |
-| PANE-05 | Phase 2 | Pending |
+| PANE-05 | Phase 2 | Complete |
 | PANE-06 | Phase 2 | Pending |
 | PANE-07 | Phase 2 | Pending |
-| INTG-01 | Phase 2 | Pending |
+| INTG-01 | Phase 2 | Complete |
 | INTG-02 | Phase 2 | Pending |
 | CONF-01 | Phase 3 | Pending |
 | CONF-02 | Phase 3 | Pending |

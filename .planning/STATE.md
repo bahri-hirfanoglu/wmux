@@ -9,9 +9,9 @@ last_activity: 2026-03-28 — Completed 01-04 Crash Recovery and State Persisten
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_plans: 9
+  completed_plans: 5
+  percent: 56
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-28)
 
 **Core value:** Terminal sessions survive disconnection — users can detach, close their terminal, and reattach without losing state or processes.
-**Current focus:** Phase 1 — Daemon Foundation
+**Current focus:** Phase 2 — Session and Pane Core
 
 ## Current Position
 
-Phase: 1 of 3 (Daemon Foundation) -- COMPLETE
-Plan: 4 of 4 in current phase
+Phase: 2 of 3 (Session and Pane Core)
+Plan: 1 of 5 in current phase -- COMPLETE
 Status: Executing
-Last activity: 2026-03-28 — Completed 01-04 Crash Recovery and State Persistence
+Last activity: 2026-03-28 — Completed 02-01 Session and Pane Data Model
 
-Progress: [██████████] 100% (Phase 1)
+Progress: [██--------] 20% (Phase 2)
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [██████████] 100% (Phase 1)
 | Phase 01 P02 | 3min | 2 tasks | 8 files |
 | Phase 01 P03 | 6min | 2 tasks | 9 files |
 | Phase 01 P04 | 11min | 2 tasks | 8 files |
+| Phase 02 P01 | 5min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,10 @@ Recent decisions affecting current work:
 - [Phase 01-04]: ConPTY handles are process-local; always respawn shells on crash recovery (cannot re-adopt)
 - [Phase 01-04]: State persistence is best-effort: errors logged, never fail session operations
 - [Phase 01-04]: daemon/paths modules exposed from library crate for integration test access
+- [Phase 02-01]: Pane IDs are session-scoped u32 (0-based), not globally unique
+- [Phase 02-01]: WT detection via WT_SESSION env var (standard method)
+- [Phase 02-01]: ConPtySession::resize() using ResizePseudoConsole Win32 API
+- [Phase 02-01]: Each Pane owns its own ConPtySession for process isolation
 
 ### Pending Todos
 
@@ -88,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T16:09:17.971Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-session-and-pane-core/02-CONTEXT.md
+Last session: 2026-03-28T16:23:14Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: .planning/phases/02-session-and-pane-core/02-01-SUMMARY.md
