@@ -197,6 +197,20 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         );
     }
 
+    // Get terminal size for status bar
+    let (term_cols, term_rows) = get_terminal_size();
+
+    // Set scroll region to leave bottom line for status bar
+    // ESC[1;{rows-1}r = set scroll region from line 1 to rows-1
+    let scroll_region = format!("\x1b[1;{}r", term_rows - 1);
+    write_bytes_to_stdout(stdout_handle, scroll_region.as_bytes());
+
+    // Draw status bar on the last line
+    draw_status_bar(stdout_handle, session_id, term_cols, term_rows);
+
+    // Move cursor back to top of scroll region
+    write_bytes_to_stdout(stdout_handle, b"\x1b[1;1H");
+
     // Get stdin handle for reading input
     let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE)? };
     let stdin_raw = stdin_handle.0 as isize;
@@ -204,7 +218,7 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
     // 7. Spawn a dedicated stdin reader thread with a channel.
     // Store the thread handle so we can cancel its blocking ReadFile on detach.
     let (stdin_tx, mut stdin_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
-    let stdin_reader = std::thread::spawn(move || {
+    let _stdin_reader = std::thread::spawn(move || {
         let handle = HANDLE(stdin_raw as *mut _);
         loop {
             let mut buf = vec![0u8; 256];
@@ -423,11 +437,12 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // Clean up — restore console mode FIRST so stdin ReadFile unblocks,
-    // then drop channels to signal threads to exit.
-    // NOTE: We intentionally do NOT join stdin_reader because it's blocked
-    // on ReadFile which can't be cancelled. Dropping the channel sender
-    // will cause it to exit on next read. The thread is detached.
+    // Clean up — reset scroll region, restore console mode
+    // ESC[r = reset scroll region to full screen
+    write_bytes_to_stdout(stdout_handle, b"\x1b[r");
+    // Clear status bar line
+    let clear_status = format!("\x1b[{};1H\x1b[2K", term_rows);
+    write_bytes_to_stdout(stdout_handle, clear_status.as_bytes());
     drop(_raw_guard);
     drop(_cp_guard);
     drop(stdin_rx);
@@ -604,6 +619,7 @@ async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
 ///
 /// Prefix+[ enters, q exits. Arrow keys and Page Up/Down scroll.
 /// Mouse wheel scrolling is handled via ANSI mouse escape sequences.
+#[allow(dead_code)]
 async fn enter_scroll_mode<R, W>(
     session_id: &str,
     reader: &mut R,
@@ -799,6 +815,7 @@ async fn enter_scroll_mode<R, W>(
 }
 
 /// Write bytes to stdout via spawn_blocking.
+#[allow(dead_code)]
 async fn write_to_stdout(stdout_handle: HANDLE, data: &[u8]) {
     let stdout_raw = stdout_handle.0 as isize;
     let data = data.to_vec();
@@ -812,6 +829,7 @@ async fn write_to_stdout(stdout_handle: HANDLE, data: &[u8]) {
 }
 
 /// Write scroll position indicator to the top of the screen.
+#[allow(dead_code)]
 async fn write_scroll_status(stdout_handle: HANDLE, offset: usize, total: usize) {
     let status = format!(
         "\x1B[s\x1B[1;1H\x1B[7m [scroll: {}/{} | q:quit arrows:scroll] \x1B[27m\x1B[u",
@@ -873,5 +891,42 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
             stdin_handle,
             original_mode,
         })
+    }
+}
+
+/// Get terminal size (columns, rows).
+fn get_terminal_size() -> (u16, u16) {
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap_or(HANDLE::default());
+        let mut info = std::mem::zeroed::<windows::Win32::System::Console::CONSOLE_SCREEN_BUFFER_INFO>();
+        if windows::Win32::System::Console::GetConsoleScreenBufferInfo(handle, &mut info).is_ok() {
+            let cols = (info.srWindow.Right - info.srWindow.Left + 1) as u16;
+            let rows = (info.srWindow.Bottom - info.srWindow.Top + 1) as u16;
+            (cols, rows)
+        } else {
+            (120, 30) // fallback
+        }
+    }
+}
+
+/// Draw tmux-style status bar on the last line of the terminal.
+fn draw_status_bar(stdout_handle: HANDLE, session_id: &str, cols: u16, rows: u16) {
+    // Move to last line, clear it, draw green background status bar
+    let status_text = format!("[wmux] session:{} | Ctrl+B d:detach", session_id);
+    let padding = cols as usize - status_text.len().min(cols as usize);
+    let bar = format!(
+        "\x1b[{};1H\x1b[42;30m{}{}\x1b[0m",
+        rows,
+        status_text,
+        " ".repeat(padding),
+    );
+    write_bytes_to_stdout(stdout_handle, bar.as_bytes());
+}
+
+/// Synchronously write bytes to stdout (used outside async context).
+fn write_bytes_to_stdout(stdout_handle: HANDLE, data: &[u8]) {
+    unsafe {
+        let mut written: u32 = 0;
+        let _ = WriteFile(stdout_handle, Some(data), Some(&mut written), None);
     }
 }
