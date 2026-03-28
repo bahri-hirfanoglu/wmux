@@ -41,8 +41,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### CLI
 
 - [x] **CLI-01**: `wmux` binary is a single self-contained executable
-- [ ] **CLI-02**: CLI provides help text and usage info for all commands
-- [ ] **CLI-03**: CLI exits with appropriate error codes and messages
+- [x] **CLI-02**: CLI provides help text and usage info for all commands
+- [x] **CLI-03**: CLI exits with appropriate error codes and messages
 
 ### Integration
 
@@ -120,8 +120,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-02 | Phase 2 | Complete |
 | CONF-01 | Phase 3 | Complete |
 | CONF-02 | Phase 3 | Complete |
-| CLI-02 | Phase 3 | Pending |
-| CLI-03 | Phase 3 | Pending |
+| CLI-02 | Phase 3 | Complete |
+| CLI-03 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 25 total

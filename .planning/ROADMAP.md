@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Daemon Foundation** - Background daemon process with Named Pipe IPC and ConPTY scaffolding (completed 2026-03-28)
 - [x] **Phase 2: Session and Pane Core** - Full session lifecycle and pane management via CLI and Windows Terminal (completed 2026-03-28)
-- [ ] **Phase 3: Configuration and Polish** - TOML config, CLI help/errors, and distribution readiness
+- [x] **Phase 3: Configuration and Polish** - TOML config, CLI help/errors, and distribution readiness (completed 2026-03-28)
 
 ## Phase Details
 
@@ -63,7 +63,7 @@ Plans:
   1. User can create `%APPDATA%\wmux\config.toml` to configure their default shell and wmux reads it on startup
   2. `wmux --help` and subcommand help flags display accurate usage information for all commands
   3. CLI exits with non-zero codes on errors and prints actionable error messages
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 03-01-PLAN.md — TOML config file with default_shell setting
@@ -78,4 +78,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Daemon Foundation | 4/4 | Complete   | 2026-03-28 |
 | 2. Session and Pane Core | 5/5 | Complete   | 2026-03-28 |
-| 3. Configuration and Polish | 0/2 | Not started | - |
+| 3. Configuration and Polish | 2/2 | Complete   | 2026-03-28 |
