@@ -102,6 +102,26 @@ impl SessionManager {
         self.sessions.get(id)
     }
 
+    /// Restore a session with a specific ID (used during crash recovery).
+    pub fn restore_session(&mut self, id: String, name: Option<String>, conpty: ConPtySession) {
+        let created_at = SystemTime::now();
+        info!("Session restored: id={}, name={:?}, pid={}", id, name, conpty.process_id());
+        self.sessions.insert(
+            id.clone(),
+            Session {
+                id,
+                name,
+                created_at,
+                conpty,
+            },
+        );
+    }
+
+    /// Set the next session ID counter (used during crash recovery).
+    pub fn set_next_id(&mut self, next_id: u32) {
+        self.next_id = next_id;
+    }
+
     /// Kill all sessions. Used during daemon shutdown.
     pub fn kill_all(&mut self) {
         let ids: Vec<String> = self.sessions.keys().cloned().collect();

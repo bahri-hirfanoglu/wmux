@@ -1,9 +1,10 @@
 mod cli;
-mod daemon;
-mod paths;
 
 use clap::Parser;
 use cli::{Cli, Commands};
+
+use wmux::daemon;
+use wmux::paths;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

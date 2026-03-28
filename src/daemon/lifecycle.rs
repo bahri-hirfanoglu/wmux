@@ -128,7 +128,7 @@ pub async fn run_daemon() -> Result<()> {
     info!("wmux daemon started (pid: {})", pid);
 
     // Create session manager
-    let session_manager = Arc::new(Mutex::new(wmux::session::SessionManager::new()));
+    let session_manager = Arc::new(Mutex::new(crate::session::SessionManager::new()));
 
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -138,7 +138,7 @@ pub async fn run_daemon() -> Result<()> {
     let sm = session_manager.clone();
     let server_handle = tokio::spawn(async move {
         if let Err(e) =
-            wmux::ipc::server::ControlServer::start(&pipe_name, shutdown_rx, shutdown_tx, sm).await
+            crate::ipc::server::ControlServer::start(&pipe_name, shutdown_rx, shutdown_tx, sm).await
         {
             tracing::error!("Control server error: {}", e);
         }
@@ -172,9 +172,9 @@ pub async fn daemon_status() -> Result<()> {
     let pipe_name = paths::control_pipe();
 
     // Try IPC first
-    match wmux::ipc::client::send_request(&pipe_name, &wmux::ipc::protocol::Request::Status).await
+    match crate::ipc::client::send_request(&pipe_name, &crate::ipc::protocol::Request::Status).await
     {
-        Ok(wmux::ipc::protocol::Response::Status {
+        Ok(crate::ipc::protocol::Response::Status {
             running,
             pid,
             session_count,
@@ -217,10 +217,10 @@ pub async fn kill_server() -> Result<()> {
     let pipe_name = paths::control_pipe();
 
     // Try IPC first
-    match wmux::ipc::client::send_request(&pipe_name, &wmux::ipc::protocol::Request::KillServer)
+    match crate::ipc::client::send_request(&pipe_name, &crate::ipc::protocol::Request::KillServer)
         .await
     {
-        Ok(wmux::ipc::protocol::Response::Ok { message }) => {
+        Ok(crate::ipc::protocol::Response::Ok { message }) => {
             println!("Daemon stopped ({})", message);
             // Give daemon a moment to clean up, then verify
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
