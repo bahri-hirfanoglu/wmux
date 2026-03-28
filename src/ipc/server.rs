@@ -302,16 +302,19 @@ where
         }
     };
 
-    // 4. Send a carriage return to trigger prompt redraw on attach.
+    // 4. Force screen redraw by triggering a resize event on ConPTY.
+    //    This makes TUI apps (like Claude) re-render their full screen.
+    //    We resize to (cols-1, rows), then back to (cols, rows).
     {
-        let in_raw = pipe_in_raw;
-        let _ = tokio::task::spawn_blocking(move || {
-            let handle = HANDLE(in_raw as *mut _);
-            let mut written: u32 = 0;
-            unsafe {
-                let _ = WriteFile(handle, Some(b"\r"), Some(&mut written), None);
-            }
-        }).await;
+        let mut mgr = session_manager.lock().await;
+        if let Some(pane) = mgr.get_active_pane_mut(&session_id) {
+            let cols = pane.conpty().cols();
+            let rows = pane.conpty().rows();
+            // Shrink by 1 col, then restore — triggers SIGWINCH-equivalent
+            let _ = pane.conpty_mut().resize(cols - 1, rows);
+            let _ = pane.conpty_mut().resize(cols, rows);
+            info!("Triggered resize redraw for session {} ({}x{})", session_id, cols, rows);
+        }
     }
 
     // 5. Spawn a dedicated client reader task.
