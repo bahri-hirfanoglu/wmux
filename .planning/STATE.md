@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-28T16:09:17.974Z"
-last_activity: 2026-03-28 — Completed 01-04 Crash Recovery and State Persistence
+stopped_at: Completed 02-02-PLAN.md
+last_updated: "2026-03-28T16:36:22.408Z"
+last_activity: 2026-03-28 — Completed 02-01 Session and Pane Data Model
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 9
-  completed_plans: 5
-  percent: 56
+  completed_plans: 6
+  percent: 20
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 2 of 3 (Session and Pane Core)
-Plan: 1 of 5 in current phase -- COMPLETE
+Plan: 2 of 5 in current phase -- COMPLETE
 Status: Executing
-Last activity: 2026-03-28 — Completed 02-01 Session and Pane Data Model
+Last activity: 2026-03-28 — Completed 02-02 Attach/Detach with Bidirectional I/O Streaming
 
-Progress: [██--------] 20% (Phase 2)
+Progress: [████------] 40% (Phase 2)
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [██--------] 20% (Phase 2)
 | Phase 01 P03 | 6min | 2 tasks | 9 files |
 | Phase 01 P04 | 11min | 2 tasks | 8 files |
 | Phase 02 P01 | 5min | 2 tasks | 11 files |
+| Phase 02 P02 | 8min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,10 @@ Recent decisions affecting current work:
 - [Phase 02-01]: WT detection via WT_SESSION env var (standard method)
 - [Phase 02-01]: ConPtySession::resize() using ResizePseudoConsole Win32 API
 - [Phase 02-01]: Each Pane owns its own ConPtySession for process isolation
+- [Phase 02]: Raw isize extraction from HANDLE for Send-safe spawn_blocking closures
+- [Phase 02]: ConsoleRawModeGuard RAII pattern for terminal mode save/restore on detach
+- [Phase 02]: Ctrl+B prefix key state machine with inline byte processing (no timer)
+- [Phase 02]: No mutex held across await points: extract raw handle values in brief lock
 
 ### Pending Todos
 
@@ -93,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T16:23:14Z
-Stopped at: Completed 02-01-PLAN.md
-Resume file: .planning/phases/02-session-and-pane-core/02-01-SUMMARY.md
+Last session: 2026-03-28T16:36:22.406Z
+Stopped at: Completed 02-02-PLAN.md
+Resume file: None

@@ -18,10 +18,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **SESS-01**: User can create a new session with `wmux new`
 - [ ] **SESS-02**: User can list all active sessions with `wmux ls`
-- [ ] **SESS-03**: User can attach to an existing session with `wmux attach`
-- [ ] **SESS-04**: User can detach from a session with `wmux detach` or keybinding
+- [x] **SESS-03**: User can attach to an existing session with `wmux attach`
+- [x] **SESS-04**: User can detach from a session with `wmux detach` or keybinding
 - [ ] **SESS-05**: User can kill a session with `wmux kill-session`
-- [ ] **SESS-06**: Sessions persist after client disconnects — processes keep running in daemon
+- [x] **SESS-06**: Sessions persist after client disconnects — processes keep running in daemon
 
 ### Pane
 
@@ -105,10 +105,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INTG-03 | Phase 1 | Complete |
 | SESS-01 | Phase 2 | Complete |
 | SESS-02 | Phase 2 | Pending |
-| SESS-03 | Phase 2 | Pending |
-| SESS-04 | Phase 2 | Pending |
+| SESS-03 | Phase 2 | Complete |
+| SESS-04 | Phase 2 | Complete |
 | SESS-05 | Phase 2 | Pending |
-| SESS-06 | Phase 2 | Pending |
+| SESS-06 | Phase 2 | Complete |
 | PANE-01 | Phase 2 | Pending |
 | PANE-02 | Phase 2 | Pending |
 | PANE-03 | Phase 2 | Pending |
