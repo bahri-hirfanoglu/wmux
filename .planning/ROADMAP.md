@@ -28,7 +28,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The daemon can spawn and manage a shell process through ConPTY on Windows 10 1809+
   4. The daemon recovers its state and restarts child processes after an unexpected crash or restart
   5. `wmux` binary exists as a single self-contained executable that can reach the daemon
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Project scaffold, CLI, and daemon lifecycle (start/stop/status)
+- [ ] 01-02-PLAN.md — Named Pipe IPC protocol and client-daemon communication
+- [ ] 01-03-PLAN.md — ConPTY shell spawning and session management
+- [ ] 01-04-PLAN.md — Crash recovery with state persistence
 
 ### Phase 2: Session and Pane Core
 **Goal**: Users can create, manage, and persist terminal sessions with multiple panes through the wmux CLI and Windows Terminal
@@ -59,6 +65,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Daemon Foundation | 0/TBD | Not started | - |
+| 1. Daemon Foundation | 0/4 | Planned | - |
 | 2. Session and Pane Core | 0/TBD | Not started | - |
 | 3. Configuration and Polish | 0/TBD | Not started | - |
