@@ -5,6 +5,7 @@ use anyhow::{bail, Context, Result};
 use tracing::info;
 
 use super::conpty::ConPtySession;
+use crate::daemon::recovery::{self, PersistedSession, PersistedState};
 use crate::ipc::protocol::SessionInfo;
 
 /// Metadata and ConPTY handle for a single session.
@@ -62,6 +63,9 @@ impl SessionManager {
             },
         );
 
+        // Persist state after structural change (best-effort)
+        self.persist_state();
+
         Ok(session_info)
     }
 
@@ -83,6 +87,10 @@ impl SessionManager {
             Some(mut session) => {
                 session.conpty.kill()?;
                 info!("Session killed: id={}", id);
+
+                // Persist state after structural change (best-effort)
+                self.persist_state();
+
                 Ok(())
             }
             None => {
@@ -105,7 +113,12 @@ impl SessionManager {
     /// Restore a session with a specific ID (used during crash recovery).
     pub fn restore_session(&mut self, id: String, name: Option<String>, conpty: ConPtySession) {
         let created_at = SystemTime::now();
-        info!("Session restored: id={}, name={:?}, pid={}", id, name, conpty.process_id());
+        info!(
+            "Session restored: id={}, name={:?}, pid={}",
+            id,
+            name,
+            conpty.process_id()
+        );
         self.sessions.insert(
             id.clone(),
             Session {
@@ -120,6 +133,38 @@ impl SessionManager {
     /// Set the next session ID counter (used during crash recovery).
     pub fn set_next_id(&mut self, next_id: u32) {
         self.next_id = next_id;
+    }
+
+    /// Convert current state to a persistable format.
+    pub fn to_persisted_state(&self) -> PersistedState {
+        let sessions: Vec<PersistedSession> = self
+            .sessions
+            .values()
+            .map(|s| PersistedSession {
+                id: s.id.clone(),
+                name: s.name.clone(),
+                pid: s.conpty.process_id(),
+                created_at: format_time(s.created_at),
+                shell: s.conpty.shell().to_string(),
+                cols: s.conpty.cols(),
+                rows: s.conpty.rows(),
+            })
+            .collect();
+
+        PersistedState {
+            version: 1,
+            sessions,
+            next_id: self.next_id,
+            saved_at: format_time(SystemTime::now()),
+        }
+    }
+
+    /// Persist state to disk (best-effort — logs errors but does not fail).
+    fn persist_state(&self) {
+        let state = self.to_persisted_state();
+        if let Err(e) = recovery::save_state(&state) {
+            tracing::error!("Failed to persist state: {}", e);
+        }
     }
 
     /// Kill all sessions. Used during daemon shutdown.

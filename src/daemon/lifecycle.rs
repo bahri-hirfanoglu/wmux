@@ -128,7 +128,43 @@ pub async fn run_daemon() -> Result<()> {
     info!("wmux daemon started (pid: {})", pid);
 
     // Create session manager
-    let session_manager = Arc::new(Mutex::new(crate::session::SessionManager::new()));
+    let mut manager = crate::session::SessionManager::new();
+
+    // Attempt crash recovery: load persisted state and recover sessions
+    match crate::daemon::recovery::load_state() {
+        Ok(state) if !state.sessions.is_empty() => {
+            info!(
+                "Found persisted state with {} sessions, attempting recovery",
+                state.sessions.len()
+            );
+            match crate::daemon::recovery::recover_sessions(&state, &mut manager) {
+                Ok(report) => {
+                    info!(
+                        "Recovered {} sessions ({} respawned, {} failed)",
+                        report.recovered + report.respawned,
+                        report.respawned,
+                        report.failed
+                    );
+                    // Save updated state with new PIDs after recovery
+                    let updated_state = manager.to_persisted_state();
+                    if let Err(e) = crate::daemon::recovery::save_state(&updated_state) {
+                        tracing::error!("Failed to save recovered state: {}", e);
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Session recovery failed: {}", e);
+                }
+            }
+        }
+        Ok(_) => {
+            info!("No persisted sessions to recover");
+        }
+        Err(e) => {
+            tracing::error!("Failed to load state for recovery: {}", e);
+        }
+    }
+
+    let session_manager = Arc::new(Mutex::new(manager));
 
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

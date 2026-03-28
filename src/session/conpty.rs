@@ -29,6 +29,12 @@ pub struct ConPtySession {
     _attr_list_buf: Vec<u8>,
     /// Whether this session has already been cleaned up.
     closed: bool,
+    /// Shell executable path used to create this session.
+    shell: String,
+    /// Terminal column count.
+    cols: i16,
+    /// Terminal row count.
+    rows: i16,
 }
 
 // HANDLE is Send-safe (it's just an isize wrapper for a kernel object).
@@ -145,6 +151,9 @@ impl ConPtySession {
                 pipe_out: output_read,
                 _attr_list_buf: attr_list_buf,
                 closed: false,
+                shell: shell_cmd.clone(),
+                cols,
+                rows,
             })
         }
     }
@@ -152,6 +161,21 @@ impl ConPtySession {
     /// Return the child process ID.
     pub fn process_id(&self) -> u32 {
         self.process_id
+    }
+
+    /// Return the terminal column count.
+    pub fn cols(&self) -> i16 {
+        self.cols
+    }
+
+    /// Return the terminal row count.
+    pub fn rows(&self) -> i16 {
+        self.rows
+    }
+
+    /// Return the shell executable path.
+    pub fn shell(&self) -> &str {
+        &self.shell
     }
 
     /// Check if the child process is still running.
