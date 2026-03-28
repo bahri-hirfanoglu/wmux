@@ -204,7 +204,7 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         let title = format!("wmux [session:{}] [panes:{}]\0", session_id, pane_count);
         let wide: Vec<u16> = title.encode_utf16().collect();
         unsafe {
-            windows::Win32::System::Console::SetConsoleTitleW(
+            let _ = windows::Win32::System::Console::SetConsoleTitleW(
                 windows::core::PCWSTR(wide.as_ptr()),
             );
         }
