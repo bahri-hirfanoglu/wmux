@@ -36,6 +36,8 @@ pub enum Request {
     ScrollBack { session_id: String, pane_id: u32, lines: i32 },
     EnterScrollMode { session_id: String, pane_id: u32 },
     ExitScrollMode { session_id: String, pane_id: u32 },
+    /// Raw input data from an attached client to forward to ConPTY stdin.
+    SessionInput { data: Vec<u8> },
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

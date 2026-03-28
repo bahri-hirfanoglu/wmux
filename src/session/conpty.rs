@@ -4,6 +4,7 @@ use std::ptr;
 use anyhow::{Context, Result};
 use tracing::info;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_TIMEOUT};
+use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows::Win32::System::Console::{ClosePseudoConsole, CreatePseudoConsole, COORD, HPCON};
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
@@ -40,6 +41,7 @@ pub struct ConPtySession {
 // HANDLE is Send-safe (it's just an isize wrapper for a kernel object).
 // ConPtySession is only accessed under a Mutex, so Sync is not needed.
 unsafe impl Send for ConPtySession {}
+
 
 impl ConPtySession {
     /// Spawn a new shell process inside a ConPTY pseudo console.
@@ -189,6 +191,66 @@ impl ConPtySession {
         self.cols = cols;
         self.rows = rows;
         Ok(())
+    }
+
+    /// Return the raw write-end handle for the ConPTY input pipe.
+    ///
+    /// The caller can use this HANDLE (which is Copy) for I/O without
+    /// holding a borrow on ConPtySession across await points.
+    pub fn pipe_in_handle(&self) -> HANDLE {
+        self.pipe_in
+    }
+
+    /// Return the raw read-end handle for the ConPTY output pipe.
+    pub fn pipe_out_handle(&self) -> HANDLE {
+        self.pipe_out
+    }
+
+    /// Asynchronously read output from the ConPTY output pipe.
+    ///
+    /// Uses `spawn_blocking` because anonymous pipes from CreatePipe()
+    /// do NOT support overlapped I/O -- synchronous ReadFile in a
+    /// blocking thread is the standard ConPTY pattern.
+    pub async fn read_output(&self, buf: &mut [u8]) -> Result<usize> {
+        // Extract raw pointer as isize (which is Send) to avoid HANDLE's !Send bound.
+        let raw = self.pipe_out.0 as isize;
+        let buf_len = buf.len();
+        let result = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+            let handle = HANDLE(raw as *mut _);
+            let mut tmp = vec![0u8; buf_len];
+            let mut bytes_read: u32 = 0;
+            unsafe {
+                ReadFile(handle, Some(&mut tmp), Some(&mut bytes_read), None)
+                    .context("ReadFile from ConPTY output pipe failed")?;
+            }
+            tmp.truncate(bytes_read as usize);
+            Ok(tmp)
+        })
+        .await
+        .context("spawn_blocking for ConPTY read panicked")??;
+
+        let n = result.len();
+        buf[..n].copy_from_slice(&result);
+        Ok(n)
+    }
+
+    /// Asynchronously write input to the ConPTY input pipe.
+    pub async fn write_input(&self, data: &[u8]) -> Result<usize> {
+        let raw = self.pipe_in.0 as isize;
+        let data = data.to_vec();
+        let bytes_written = tokio::task::spawn_blocking(move || -> Result<usize> {
+            let handle = HANDLE(raw as *mut _);
+            let mut written: u32 = 0;
+            unsafe {
+                WriteFile(handle, Some(&data), Some(&mut written), None)
+                    .context("WriteFile to ConPTY input pipe failed")?;
+            }
+            Ok(written as usize)
+        })
+        .await
+        .context("spawn_blocking for ConPTY write panicked")??;
+
+        Ok(bytes_written)
     }
 
     /// Check if the child process is still running.

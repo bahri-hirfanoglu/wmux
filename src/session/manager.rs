@@ -6,7 +6,7 @@ use tracing::info;
 
 use super::conpty::ConPtySession;
 use super::pane::Pane;
-use crate::daemon::recovery::{self, PersistedSession, PersistedState};
+use crate::daemon::recovery::{self, PersistedPane, PersistedSession, PersistedState};
 use crate::ipc::protocol::SessionInfo;
 
 /// Metadata and panes for a single session.
@@ -16,6 +16,8 @@ pub struct Session {
     pub created_at: SystemTime,
     pub panes: Vec<Pane>,
     pub active_pane: u32,
+    /// Number of clients currently attached to this session.
+    pub attached_clients: u32,
 }
 
 /// Manages all active terminal sessions.
@@ -64,6 +66,7 @@ impl SessionManager {
                 created_at,
                 panes: vec![pane],
                 active_pane: 0,
+                attached_clients: 0,
             },
         );
 
@@ -245,6 +248,47 @@ impl SessionManager {
         self.sessions.get(id)
     }
 
+    /// Get a mutable reference to a session by ID.
+    pub fn get_session_mut(&mut self, id: &str) -> Option<&mut Session> {
+        self.sessions.get_mut(id)
+    }
+
+    /// Get a mutable reference to the active pane's ConPTY for a given session.
+    pub fn get_active_conpty_mut(&mut self, session_id: &str) -> Option<&mut ConPtySession> {
+        self.sessions.get_mut(session_id).and_then(|s| {
+            let active = s.active_pane;
+            s.panes
+                .iter_mut()
+                .find(|p| p.id() == active)
+                .map(|p| p.conpty_mut())
+        })
+    }
+
+    /// Increment the attached client count for a session.
+    pub fn attach_client(&mut self, session_id: &str) -> Result<u32> {
+        let session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
+        session.attached_clients += 1;
+        info!(
+            "Client attached to session {}: {} clients",
+            session_id, session.attached_clients
+        );
+        Ok(session.attached_clients)
+    }
+
+    /// Decrement the attached client count for a session.
+    pub fn detach_client(&mut self, session_id: &str) {
+        if let Some(session) = self.sessions.get_mut(session_id) {
+            session.attached_clients = session.attached_clients.saturating_sub(1);
+            info!(
+                "Client detached from session {}: {} clients",
+                session_id, session.attached_clients
+            );
+        }
+    }
+
     /// Restore a session with a specific ID (used during crash recovery).
     /// Creates a session with a single default pane from the given ConPTY.
     pub fn restore_session(&mut self, id: String, name: Option<String>, conpty: ConPtySession) {
@@ -267,6 +311,7 @@ impl SessionManager {
                 created_at,
                 panes: vec![pane],
                 active_pane: 0,
+                attached_clients: 0,
             },
         );
     }
@@ -282,16 +327,29 @@ impl SessionManager {
             .sessions
             .values()
             .map(|s| {
-                // Persist based on the first (default) pane for backward compat
-                let pane = &s.panes[0];
+                let persisted_panes: Vec<PersistedPane> = s
+                    .panes
+                    .iter()
+                    .map(|p| PersistedPane {
+                        id: p.id(),
+                        pid: p.process_id(),
+                        shell: p.conpty().shell().to_string(),
+                        cols: p.conpty().cols(),
+                        rows: p.conpty().rows(),
+                    })
+                    .collect();
+
+                // First pane used for legacy fields (backward compat)
+                let first = &s.panes[0];
                 PersistedSession {
                     id: s.id.clone(),
                     name: s.name.clone(),
-                    pid: pane.process_id(),
+                    pid: first.process_id(),
                     created_at: format_time(s.created_at),
-                    shell: pane.conpty().shell().to_string(),
-                    cols: pane.conpty().cols(),
-                    rows: pane.conpty().rows(),
+                    shell: first.conpty().shell().to_string(),
+                    cols: first.conpty().cols(),
+                    rows: first.conpty().rows(),
+                    panes: persisted_panes,
                 }
             })
             .collect();

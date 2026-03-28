@@ -29,17 +29,31 @@ pub fn require_windows_terminal() -> Result<()> {
 /// Split the current pane in Windows Terminal using `wt.exe`.
 ///
 /// `direction` should be "horizontal" or "vertical".
-/// `command` is the command to run in the new pane.
-pub fn wt_split_pane(direction: &str, command: &str) -> Result<()> {
-    let status = std::process::Command::new("wt.exe")
-        .args(["split-pane", &format!("--{}", direction), command])
-        .status()
-        .context("Failed to execute wt.exe. Is Windows Terminal installed?")?;
+/// - "horizontal" creates a horizontal split (new pane below)
+/// - "vertical" creates a vertical split (new pane to the right)
+///
+/// `command_line` is the full command to run in the new pane
+/// (e.g., `"C:\path\to\wmux.exe attach 1 --pane 2"`).
+pub fn wt_split_pane(direction: &str, command_line: &str) -> Result<()> {
+    let output = std::process::Command::new("wt.exe")
+        .args([
+            "-w",
+            "0",
+            "split-pane",
+            &format!("--{}", direction),
+            "cmd",
+            "/c",
+            command_line,
+        ])
+        .output()
+        .context("Failed to execute wt.exe — is Windows Terminal installed and on PATH?")?;
 
-    if !status.success() {
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         bail!(
-            "wt.exe split-pane failed with exit code: {}",
-            status.code().unwrap_or(-1)
+            "wt.exe split-pane failed (exit code {}): {}",
+            output.status.code().unwrap_or(-1),
+            stderr.trim()
         );
     }
 

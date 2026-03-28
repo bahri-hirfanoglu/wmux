@@ -36,16 +36,47 @@ impl Default for PersistedState {
     }
 }
 
+/// Metadata for a single persisted pane within a session.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PersistedPane {
+    pub id: u32,
+    pub pid: u32,
+    pub shell: String,
+    pub cols: i16,
+    pub rows: i16,
+}
+
 /// Metadata for a single persisted session.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PersistedSession {
     pub id: String,
     pub name: Option<String>,
+    /// Legacy single-pane pid (kept for backward compat with v1 state files).
+    #[serde(default)]
     pub pid: u32,
     pub created_at: String,
+    /// Legacy single-pane fields (kept for backward compat).
+    #[serde(default = "default_shell")]
     pub shell: String,
+    #[serde(default = "default_cols")]
     pub cols: i16,
+    #[serde(default = "default_rows")]
     pub rows: i16,
+    /// All panes in this session. If empty, falls back to legacy single-pane fields.
+    #[serde(default)]
+    pub panes: Vec<PersistedPane>,
+}
+
+fn default_shell() -> String {
+    "powershell.exe".to_string()
+}
+
+fn default_cols() -> i16 {
+    120
+}
+
+fn default_rows() -> i16 {
+    30
 }
 
 /// Report of recovery results after daemon restart.
@@ -132,31 +163,67 @@ pub fn recover_sessions(
     let mut failed: u32 = 0;
 
     for ps in &persisted.sessions {
-        let alive = is_process_alive(ps.pid);
-
-        let description = if alive {
-            format!(
-                "Session {}: original process alive (pid {}), spawning replacement shell",
-                ps.id, ps.pid
-            )
+        // Determine the panes to recover: use new multi-pane list if available,
+        // otherwise fall back to legacy single-pane fields.
+        let panes_to_recover: Vec<PersistedPane> = if !ps.panes.is_empty() {
+            ps.panes.clone()
         } else {
-            format!("Session {}: process dead, spawning new shell", ps.id)
+            vec![PersistedPane {
+                id: 0,
+                pid: ps.pid,
+                shell: ps.shell.clone(),
+                cols: ps.cols,
+                rows: ps.rows,
+            }]
         };
-        info!("{}", description);
 
-        // Spawn a new ConPTY session with the same dimensions
-        match crate::session::conpty::ConPtySession::new(ps.cols, ps.rows, Some(&ps.shell)) {
+        // Recover the first pane to create the session via restore_session
+        let first = &panes_to_recover[0];
+        let alive = is_process_alive(first.pid);
+        info!(
+            "Session {}: recovering {} pane(s), first pane pid {} ({})",
+            ps.id,
+            panes_to_recover.len(),
+            first.pid,
+            if alive { "alive" } else { "dead" }
+        );
+
+        match crate::session::conpty::ConPtySession::new(first.cols, first.rows, Some(&first.shell)) {
             Ok(conpty) => {
                 manager.restore_session(ps.id.clone(), ps.name.clone(), conpty);
-                if alive {
-                    recovered += 1;
-                } else {
-                    respawned += 1;
-                }
+                if alive { recovered += 1; } else { respawned += 1; }
             }
             Err(e) => {
                 warn!("Failed to recover session {}: {}", ps.id, e);
                 failed += 1;
+                continue;
+            }
+        }
+
+        // Recover additional panes (index 1+)
+        for pp in &panes_to_recover[1..] {
+            let pane_alive = is_process_alive(pp.pid);
+            info!(
+                "Session {} pane {}: pid {} ({}), spawning replacement",
+                ps.id, pp.id, pp.pid,
+                if pane_alive { "alive" } else { "dead" }
+            );
+
+            match manager.add_pane(&ps.id, pp.cols, pp.rows, Some(&pp.shell)) {
+                Ok((new_pane_id, new_pid)) => {
+                    info!(
+                        "Session {} pane {} recovered as pane {} (pid {})",
+                        ps.id, pp.id, new_pane_id, new_pid
+                    );
+                    if pane_alive { recovered += 1; } else { respawned += 1; }
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to recover pane {} in session {}: {}",
+                        pp.id, ps.id, e
+                    );
+                    failed += 1;
+                }
             }
         }
     }

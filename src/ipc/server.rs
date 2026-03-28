@@ -3,7 +3,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tokio::net::windows::named_pipe::ServerOptions;
 use tokio::sync::{watch, Mutex};
-use tracing::{error, info};
+use tracing::{error, info, warn};
+use windows::Win32::Foundation::HANDLE;
+use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows::Win32::System::Threading::GetCurrentProcessId;
 
 use super::protocol::{read_message, write_message, Request, Response};
@@ -77,7 +79,8 @@ impl ControlServer {
 
 /// Handle a single client connection.
 ///
-/// Reads a Request, processes it, sends a Response, then disconnects.
+/// For most requests: reads a Request, processes it, sends a Response, then disconnects.
+/// For AttachSession: enters a long-lived bidirectional streaming loop.
 async fn handle_connection(
     mut pipe: tokio::net::windows::named_pipe::NamedPipeServer,
     shutdown_tx: watch::Sender<bool>,
@@ -90,6 +93,11 @@ async fn handle_connection(
         .context("Failed to read request from client")?;
 
     info!("Received request: {:?}", request);
+
+    // Check if this is an attach request — it needs special long-lived handling
+    if let Request::AttachSession { session_id } = request {
+        return handle_attach(reader, writer, session_id, session_manager).await;
+    }
 
     let response = match request {
         Request::Ping => Response::Pong,
@@ -174,6 +182,8 @@ async fn handle_connection(
                 },
             }
         }
+        // AttachSession is handled above, but the compiler needs this arm
+        Request::AttachSession { .. } => unreachable!(),
         _ => Response::Error {
             message: "Command not yet implemented".to_string(),
         },
@@ -182,5 +192,196 @@ async fn handle_connection(
     write_message(&mut writer, &response).await?;
     info!("Sent response, disconnecting client");
 
+    Ok(())
+}
+
+/// Handle a long-lived attach session with bidirectional I/O streaming.
+///
+/// IMPORTANT: The SessionManager mutex is NOT held across await points.
+/// We lock briefly to extract raw HANDLE values (which are Copy), then
+/// use the handles directly in the streaming loop.
+async fn handle_attach<R, W>(
+    mut reader: R,
+    mut writer: W,
+    session_id: String,
+    session_manager: Arc<Mutex<SessionManager>>,
+) -> Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
+    // 1. Validate session and get pipe handles as raw isize (brief lock).
+    //    HANDLE contains *mut c_void which is !Send, so we extract the raw
+    //    pointer value as isize (which IS Send) and reconstruct HANDLE inside
+    //    spawn_blocking closures.
+    //
+    //    IMPORTANT: No iterators over Pane (which contains HANDLE) may be alive
+    //    across await points, because the future must be Send for tokio::spawn.
+    let (pipe_in_raw, pipe_out_raw, pane_count) = {
+        let mut mgr = session_manager.lock().await;
+        let session = match mgr.get_session_mut(&session_id) {
+            Some(s) => s,
+            None => {
+                return send_error_and_return(&mut writer, format!("Session '{}' not found", session_id)).await;
+            }
+        };
+
+        let pane_count = session.panes.len() as u32;
+        let active_id = session.active_pane;
+
+        // Extract pipe handles without holding an iterator across await points.
+        // The iterator over Pane (which contains HANDLE, a !Send type) must not
+        // be alive across any await point.
+        let handles: Option<(isize, isize)> = session
+            .panes
+            .iter()
+            .find(|p| p.id() == active_id)
+            .map(|p| {
+                let pin = p.conpty().pipe_in_handle().0 as isize;
+                let pout = p.conpty().pipe_out_handle().0 as isize;
+                (pin, pout)
+            });
+
+        match handles {
+            Some((pin, pout)) => {
+                mgr.attach_client(&session_id)?;
+                (pin, pout, pane_count)
+            }
+            None => {
+                return send_error_and_return(
+                    &mut writer,
+                    format!("No active pane in session '{}'", session_id),
+                ).await;
+            }
+        }
+    }; // mutex released here
+
+    // 2. Send AttachStarted confirmation
+    let resp = Response::AttachStarted {
+        session_id: session_id.clone(),
+        pane_count,
+    };
+    write_message(&mut writer, &resp).await?;
+    info!("Attach started for session {}", session_id);
+
+    // 3. Enter bidirectional streaming loop
+    //    - Output task: read from ConPTY output pipe, send to client
+    //    - Input task: read requests from client, forward input to ConPTY
+    // We use two separate async operations in a select loop.
+    // ConPTY reads use spawn_blocking (anonymous pipes don't support overlapped I/O).
+    loop {
+        // Spawn a blocking read from ConPTY output
+        let out_raw = pipe_out_raw;
+        let output_task = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+            let handle = HANDLE(out_raw as *mut _);
+            let mut tmp = vec![0u8; 4096];
+            let mut bytes_read: u32 = 0;
+            unsafe {
+                ReadFile(handle, Some(&mut tmp), Some(&mut bytes_read), None)
+                    .context("ReadFile from ConPTY output pipe failed")?;
+            }
+            tmp.truncate(bytes_read as usize);
+            Ok(tmp)
+        });
+
+        // Read the next message from the client (non-blocking async pipe)
+        let input_task = read_message::<_, Request>(&mut reader);
+
+        tokio::select! {
+            // ConPTY produced output — forward to client
+            output_result = output_task => {
+                match output_result {
+                    Ok(Ok(data)) if !data.is_empty() => {
+                        let resp = Response::SessionOutput { data };
+                        if let Err(e) = write_message(&mut writer, &resp).await {
+                            warn!("Failed to send output to client: {}", e);
+                            break; // Client disconnected
+                        }
+                    }
+                    Ok(Ok(_)) => {
+                        // Empty read — ConPTY pipe closed (shell exited)
+                        info!("ConPTY output pipe closed for session {}", session_id);
+                        break;
+                    }
+                    Ok(Err(e)) => {
+                        // ReadFile error — pipe broken (shell exited or crashed)
+                        info!("ConPTY read error for session {}: {}", session_id, e);
+                        break;
+                    }
+                    Err(e) => {
+                        error!("spawn_blocking panicked: {}", e);
+                        break;
+                    }
+                }
+            }
+
+            // Client sent a message — process it
+            input_result = input_task => {
+                match input_result {
+                    Ok(Request::SessionInput { data }) => {
+                        // Write input to ConPTY
+                        let in_raw = pipe_in_raw;
+                        let write_result = tokio::task::spawn_blocking(move || -> Result<()> {
+                            let handle = HANDLE(in_raw as *mut _);
+                            let mut written: u32 = 0;
+                            unsafe {
+                                WriteFile(handle, Some(&data), Some(&mut written), None)
+                                    .context("WriteFile to ConPTY input pipe failed")?;
+                            }
+                            Ok(())
+                        }).await;
+
+                        match write_result {
+                            Ok(Ok(())) => {}
+                            Ok(Err(e)) => {
+                                warn!("Failed to write input to ConPTY: {}", e);
+                                break;
+                            }
+                            Err(e) => {
+                                error!("spawn_blocking panicked on write: {}", e);
+                                break;
+                            }
+                        }
+                    }
+                    Ok(Request::DetachSession { .. }) => {
+                        info!("Client requested detach from session {}", session_id);
+                        break;
+                    }
+                    Ok(other) => {
+                        warn!("Unexpected request during attach: {:?}", other);
+                        // Could handle inline commands here in future
+                    }
+                    Err(e) => {
+                        // Client disconnected (pipe broken/closed)
+                        info!("Client disconnected from session {}: {}", session_id, e);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Clean up: decrement attached clients, send Ok response for detach
+    {
+        let mut mgr = session_manager.lock().await;
+        mgr.detach_client(&session_id);
+    }
+
+    // Try to send a final Ok response (may fail if client already disconnected)
+    let _ = write_message(&mut writer, &Response::Ok {
+        message: format!("Detached from session {}", session_id),
+    }).await;
+
+    info!("Attach handler finished for session {}", session_id);
+    Ok(())
+}
+
+/// Helper: send an error response and return Ok(()).
+async fn send_error_and_return<W: tokio::io::AsyncWrite + Unpin>(
+    writer: &mut W,
+    message: String,
+) -> Result<()> {
+    let resp = Response::Error { message };
+    let _ = write_message(writer, &resp).await;
     Ok(())
 }
