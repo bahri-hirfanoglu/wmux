@@ -97,13 +97,37 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated during roadmap creation) | | |
+| DAEMON-01 | Phase 1 | Pending |
+| DAEMON-02 | Phase 1 | Pending |
+| DAEMON-03 | Phase 1 | Pending |
+| DAEMON-04 | Phase 1 | Pending |
+| CLI-01 | Phase 1 | Pending |
+| INTG-03 | Phase 1 | Pending |
+| SESS-01 | Phase 2 | Pending |
+| SESS-02 | Phase 2 | Pending |
+| SESS-03 | Phase 2 | Pending |
+| SESS-04 | Phase 2 | Pending |
+| SESS-05 | Phase 2 | Pending |
+| SESS-06 | Phase 2 | Pending |
+| PANE-01 | Phase 2 | Pending |
+| PANE-02 | Phase 2 | Pending |
+| PANE-03 | Phase 2 | Pending |
+| PANE-04 | Phase 2 | Pending |
+| PANE-05 | Phase 2 | Pending |
+| PANE-06 | Phase 2 | Pending |
+| PANE-07 | Phase 2 | Pending |
+| INTG-01 | Phase 2 | Pending |
+| INTG-02 | Phase 2 | Pending |
+| CONF-01 | Phase 3 | Pending |
+| CONF-02 | Phase 3 | Pending |
+| CLI-02 | Phase 3 | Pending |
+| CLI-03 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- v1 requirements: 25 total
+- Mapped to phases: 25
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*
