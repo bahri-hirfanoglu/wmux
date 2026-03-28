@@ -54,6 +54,14 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::New) => {
+            // Auto-start daemon if not running (tmux behavior)
+            if let Err(e) = wmux::ipc::client::ensure_daemon_running().await {
+                exit_error(
+                    &format!("failed to start daemon: {}", e),
+                    Some("Try starting manually with 'wmux daemon-start'"),
+                    1,
+                );
+            }
             let pipe_name = paths::control_pipe();
             let request = wmux::ipc::protocol::Request::NewSession { name: None };
             match wmux::ipc::client::send_request(&pipe_name, &request).await {
@@ -80,6 +88,14 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Ls) => {
+            // Auto-start daemon if not running
+            if let Err(e) = wmux::ipc::client::ensure_daemon_running().await {
+                exit_error(
+                    &format!("failed to start daemon: {}", e),
+                    Some("Try starting manually with 'wmux daemon-start'"),
+                    1,
+                );
+            }
             let pipe_name = paths::control_pipe();
             let request = wmux::ipc::protocol::Request::ListSessions;
             match wmux::ipc::client::send_request(&pipe_name, &request).await {
@@ -143,6 +159,14 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Attach { session_id, pane }) => {
+            // Auto-start daemon if not running (tmux behavior)
+            if let Err(e) = wmux::ipc::client::ensure_daemon_running().await {
+                exit_error(
+                    &format!("failed to start daemon: {}", e),
+                    Some("Try starting manually with 'wmux daemon-start'"),
+                    1,
+                );
+            }
             if let Err(e) = wmux::wt::require_windows_terminal() {
                 exit_error(
                     &format!("Windows Terminal is required: {}", e),

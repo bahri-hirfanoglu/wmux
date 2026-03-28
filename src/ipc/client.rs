@@ -30,6 +30,34 @@ const RESIZE_AMOUNT: u32 = 5;
 #[allow(dead_code)]
 const SCROLL_PAGE_SIZE: usize = 50;
 
+/// Ensure the daemon is running, starting it if needed.
+/// Returns Ok(()) if daemon is reachable after this call.
+pub async fn ensure_daemon_running() -> Result<()> {
+    let pipe_name = crate::paths::control_pipe();
+
+    // Try to connect to existing daemon
+    if ClientOptions::new().open(&pipe_name).is_ok() {
+        return Ok(());
+    }
+
+    // Daemon not running — auto-start it
+    eprintln!("Starting daemon...");
+    crate::daemon::lifecycle::start_daemon().await?;
+
+    // Wait for daemon to be ready (up to 3 seconds)
+    for _ in 0..30 {
+        sleep(Duration::from_millis(100)).await;
+        if ClientOptions::new().open(&pipe_name).is_ok() {
+            return Ok(());
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "Daemon started but not responding. Check logs at {:?}",
+        crate::paths::log_file().unwrap_or_default()
+    ))
+}
+
 /// Send a request to the daemon via Named Pipe and return the response.
 ///
 /// Connects to \\.\pipe\wmux-ctl, writes the request, reads the response.
