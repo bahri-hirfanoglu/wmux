@@ -302,26 +302,19 @@ where
         }
     };
 
-    // 4. Send buffered scrollback content so client sees the current screen state.
+    // 4. Force shell to redraw by sending a newline to ConPTY.
+    //    This makes the shell print a fresh prompt immediately after attach,
+    //    instead of requiring the user to press Enter first.
     {
-        let mgr = session_manager.lock().await;
-        if let Some(pane) = mgr.get_active_pane(&session_id) {
-            let sb = pane.scrollback();
-            let total = sb.line_count();
-            if total > 0 {
-                let start = total.saturating_sub(50);
-                let lines = sb.get_lines(start, total - start);
-                let mut replay_data = Vec::new();
-                for line in &lines {
-                    replay_data.extend_from_slice(line);
-                    replay_data.push(b'\n');
-                }
-                if !replay_data.is_empty() {
-                    let resp = Response::SessionOutput { data: replay_data };
-                    let _ = write_message(&mut writer, &resp).await;
-                }
+        let in_raw = pipe_in_raw;
+        let _ = tokio::task::spawn_blocking(move || {
+            let handle = HANDLE(in_raw as *mut _);
+            let mut written: u32 = 0;
+            // Send a carriage return to trigger prompt redraw
+            unsafe {
+                let _ = WriteFile(handle, Some(b"\r"), Some(&mut written), None);
             }
-        }
+        }).await;
     }
 
     // 5. Spawn a dedicated client reader task.

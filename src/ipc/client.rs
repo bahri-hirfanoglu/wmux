@@ -816,8 +816,8 @@ struct CodepageGuard {
 impl Drop for CodepageGuard {
     fn drop(&mut self) {
         unsafe {
-            windows::Win32::System::Console::SetConsoleCP(self.original_input_cp);
-            windows::Win32::System::Console::SetConsoleOutputCP(self.original_output_cp);
+            let _ = windows::Win32::System::Console::SetConsoleCP(self.original_input_cp);
+            let _ = windows::Win32::System::Console::SetConsoleOutputCP(self.original_output_cp);
         }
     }
 }
@@ -828,8 +828,8 @@ fn set_utf8_codepage() -> CodepageGuard {
     unsafe {
         let original_input_cp = windows::Win32::System::Console::GetConsoleCP();
         let original_output_cp = windows::Win32::System::Console::GetConsoleOutputCP();
-        windows::Win32::System::Console::SetConsoleCP(65001);
-        windows::Win32::System::Console::SetConsoleOutputCP(65001);
+        let _ = windows::Win32::System::Console::SetConsoleCP(65001);
+        let _ = windows::Win32::System::Console::SetConsoleOutputCP(65001);
         CodepageGuard {
             original_input_cp,
             original_output_cp,
