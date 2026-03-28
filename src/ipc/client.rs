@@ -200,16 +200,12 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
     // Get terminal size for status bar
     let (term_cols, term_rows) = get_terminal_size();
 
-    // Set scroll region to leave bottom line for status bar
-    // ESC[1;{rows-1}r = set scroll region from line 1 to rows-1
+    // Clear screen, set scroll region, draw status bar
+    write_bytes_to_stdout(stdout_handle, b"\x1b[2J\x1b[H"); // clear + home
     let scroll_region = format!("\x1b[1;{}r", term_rows - 1);
     write_bytes_to_stdout(stdout_handle, scroll_region.as_bytes());
-
-    // Draw status bar on the last line
     draw_status_bar(stdout_handle, session_id, term_cols, term_rows);
-
-    // Move cursor back to top of scroll region
-    write_bytes_to_stdout(stdout_handle, b"\x1b[1;1H");
+    write_bytes_to_stdout(stdout_handle, b"\x1b[1;1H"); // cursor to top
 
     // Get stdin handle for reading input
     let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE)? };

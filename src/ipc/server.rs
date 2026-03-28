@@ -302,17 +302,22 @@ where
         }
     };
 
-    // 4. Force shell to redraw by sending a newline to ConPTY.
-    //    This makes the shell print a fresh prompt immediately after attach,
-    //    instead of requiring the user to press Enter first.
+    // 4. Set wmux-aware prompt and trigger redraw.
+    //    Sends a PowerShell command to prepend [wmux:session] to the prompt,
+    //    then a carriage return to show it immediately.
     {
         let in_raw = pipe_in_raw;
+        let sid = session_id.clone();
         let _ = tokio::task::spawn_blocking(move || {
             let handle = HANDLE(in_raw as *mut _);
             let mut written: u32 = 0;
-            // Send a carriage return to trigger prompt redraw
+            // Override PowerShell prompt to show wmux prefix
+            let prompt_cmd = format!(
+                "function prompt {{ Write-Host '[wmux:{}]' -NoNewline -ForegroundColor Cyan; \" $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}\r",
+                sid
+            );
             unsafe {
-                let _ = WriteFile(handle, Some(b"\r"), Some(&mut written), None);
+                let _ = WriteFile(handle, Some(prompt_cmd.as_bytes()), Some(&mut written), None);
             }
         }).await;
     }
