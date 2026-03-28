@@ -7,7 +7,8 @@ use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows::Win32::System::Console::{
     GetConsoleMode, GetStdHandle, SetConsoleMode, CONSOLE_MODE,
     ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
-    ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+    ENABLE_WINDOW_INPUT, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
 };
 
 use super::protocol::{read_message, write_message, NavDirection, Request, Response, SplitDirection};
@@ -200,34 +201,43 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
     let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE)? };
     let stdin_raw = stdin_handle.0 as isize;
 
-    // 6. Bidirectional streaming loop with prefix key detection
+    // 7. Spawn a dedicated stdin reader thread with a channel.
+    // This avoids spawn_blocking overhead on every keystroke.
+    let (stdin_tx, mut stdin_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(32);
+    let stdin_reader = std::thread::spawn(move || {
+        let handle = HANDLE(stdin_raw as *mut _);
+        loop {
+            let mut buf = vec![0u8; 256];
+            let mut bytes_read: u32 = 0;
+            let result = unsafe {
+                ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
+            };
+            match result {
+                Ok(()) if bytes_read > 0 => {
+                    buf.truncate(bytes_read as usize);
+                    if stdin_tx.blocking_send(buf).is_err() {
+                        break; // receiver dropped — client exiting
+                    }
+                }
+                _ => break, // stdin closed or error
+            }
+        }
+    });
+
+    // 8. Bidirectional streaming loop with prefix key detection
     let mut prefix_active = false;
-    // Track the last split direction requested via prefix key so we can tell WT the right direction
     let mut pending_split_direction: Option<String> = None;
 
     loop {
-        // Spawn blocking stdin read
-        let stdin_r = stdin_raw;
-        let stdin_task = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-            let handle = HANDLE(stdin_r as *mut _);
-            let mut buf = vec![0u8; 256];
-            let mut bytes_read: u32 = 0;
-            unsafe {
-                ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
-                    .context("ReadFile from stdin failed")?;
-            }
-            buf.truncate(bytes_read as usize);
-            Ok(buf)
-        });
 
         // Read output from daemon
         let output_task = read_message::<_, Response>(&mut reader);
 
         tokio::select! {
-            // User typed something on stdin
-            stdin_result = stdin_task => {
+            // User typed something on stdin (from dedicated reader thread)
+            stdin_result = stdin_rx.recv() => {
                 match stdin_result {
-                    Ok(Ok(data)) if !data.is_empty() => {
+                    Some(data) if !data.is_empty() => {
                         let mut to_send: Vec<u8> = Vec::new();
                         let mut should_detach = false;
                         let mut i = 0;
@@ -328,16 +338,12 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
                             }
                         }
                     }
-                    Ok(Ok(_)) => {
-                        // Empty read — stdin closed
+                    Some(_) => {
+                        // Empty data — shouldn't happen with our reader
                         break;
                     }
-                    Ok(Err(e)) => {
-                        info!("stdin read error: {}", e);
-                        break;
-                    }
-                    Err(e) => {
-                        info!("stdin task panicked: {}", e);
+                    None => {
+                        // Channel closed — stdin reader thread exited
                         break;
                     }
                 }
@@ -408,7 +414,10 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // ConsoleRawModeGuard restores console mode on drop
+    // Clean up: drop stdin channel to signal reader thread to exit,
+    // then restore console mode and codepage.
+    drop(stdin_rx);
+    let _ = stdin_reader.join();
     drop(_raw_guard);
 
     Ok(())
@@ -836,10 +845,13 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
         GetConsoleMode(stdin_handle, &mut original_mode)
             .context("Failed to get console mode")?;
 
-        // Disable line input, echo, and processed input (Ctrl+C handling)
-        // This puts the console in raw mode where every keystroke is sent immediately.
-        let raw_mode = original_mode
-            & !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+        // Raw mode: disable line buffering, echo, and Ctrl+C processing.
+        // Enable VT input for proper escape sequence passthrough (arrow keys etc).
+        // Enable window input for resize events.
+        let raw_mode = (original_mode
+            & !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT))
+            | ENABLE_VIRTUAL_TERMINAL_INPUT
+            | ENABLE_WINDOW_INPUT;
         SetConsoleMode(stdin_handle, raw_mode)
             .context("Failed to set raw console mode")?;
 

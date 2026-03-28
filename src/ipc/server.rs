@@ -125,8 +125,14 @@ async fn handle_connection(
         Request::NewSession { name } => {
             let mut mgr = session_manager.lock().await;
             match mgr.create_session(name) {
-                Ok(info) => Response::Ok {
-                    message: format!("Created session: {}", info.id),
+                Ok(info) => {
+                    let sid = info.id.clone();
+                    // Start background drain thread for this session's ConPTY output.
+                    // This ensures the output pipe is always read, preventing shell blocking.
+                    start_conpty_drain(&mgr, &sid, session_manager.clone());
+                    Response::Ok {
+                        message: format!("Created session: {}", sid),
+                    }
                 },
                 Err(e) => Response::Error {
                     message: format!("Failed to create session: {}", e),
@@ -239,7 +245,7 @@ where
     //
     //    IMPORTANT: No iterators over Pane (which contains HANDLE) may be alive
     //    across await points, because the future must be Send for tokio::spawn.
-    let (pipe_in_raw, pipe_out_raw, pane_count) = {
+    let (pipe_in_raw, pane_count) = {
         let mut mgr = session_manager.lock().await;
         let session = match mgr.get_session_mut(&session_id) {
             Some(s) => s,
@@ -251,31 +257,17 @@ where
         let pane_count = session.panes.len() as u32;
         let active_id = session.active_pane;
 
-        // Extract pipe handles without holding an iterator across await points.
-        // The iterator over Pane (which contains HANDLE, a !Send type) must not
-        // be alive across any await point.
-        let handles: Option<(isize, isize)> = session
+        let pipe_in = session
             .panes
             .iter()
             .find(|p| p.id() == active_id)
-            .map(|p| {
-                let pin = p.conpty().pipe_in_handle().0 as isize;
-                let pout = p.conpty().pipe_out_handle().0 as isize;
-                (pin, pout)
-            });
+            .map(|p| p.conpty().pipe_in_handle().0 as isize);
 
-        match handles {
-            Some((pin, pout)) => {
-                // Debug: log handle values and process status
-                let active_pane = session.panes.iter().find(|p| p.id() == active_id);
-                if let Some(pane) = active_pane {
-                    info!(
-                        "Attach: session={}, pane={}, pid={}, alive={}, pipe_in={:#x}, pipe_out={:#x}",
-                        session_id, active_id, pane.process_id(), pane.is_alive(), pin, pout
-                    );
-                }
+        match pipe_in {
+            Some(pin) => {
+                info!("Attach: session={}, pane={}", session_id, active_id);
                 mgr.attach_client(&session_id)?;
-                (pin, pout, pane_count)
+                (pin, pane_count)
             }
             None => {
                 return send_error_and_return(
@@ -294,77 +286,79 @@ where
     write_message(&mut writer, &resp).await?;
     info!("Attach started for session {}", session_id);
 
-    // 3. Enter bidirectional streaming loop
-    //    - Output task: read from ConPTY output pipe, send to client
-    //    - Input task: read requests from client, forward input to ConPTY
-    // We use two separate async operations in a select loop.
-    // ConPTY reads use spawn_blocking (anonymous pipes don't support overlapped I/O).
-    loop {
-        // Spawn a blocking read from ConPTY output
-        let out_raw = pipe_out_raw;
-        let output_task = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-            let handle = HANDLE(out_raw as *mut _);
-            let mut tmp = vec![0u8; 4096];
-            let mut bytes_read: u32 = 0;
-            let read_result = unsafe {
-                ReadFile(handle, Some(&mut tmp), Some(&mut bytes_read), None)
-            };
-            match read_result {
-                Ok(()) => {
-                    tmp.truncate(bytes_read as usize);
-                    Ok(tmp)
+    // 3. Subscribe to the session's broadcast channel for ConPTY output.
+    //    The drain thread (started when session was created) continuously
+    //    reads ConPTY and broadcasts. We just subscribe here.
+    let mut output_rx = {
+        let mgr = session_manager.lock().await;
+        match mgr.get_session(&session_id) {
+            Some(session) => match &session.output_tx {
+                Some(tx) => tx.subscribe(),
+                None => {
+                    return send_error_and_return(&mut writer, format!("Session '{}' has no output channel", session_id)).await;
                 }
-                Err(e) => {
-                    Err(anyhow::anyhow!("ReadFile from ConPTY output pipe failed (handle={:#x}): {}", out_raw, e))
+            },
+            None => {
+                return send_error_and_return(&mut writer, format!("Session '{}' not found", session_id)).await;
+            }
+        }
+    };
+
+    // 4. Send buffered scrollback content so client sees the current screen state.
+    //    Without this, the client only sees output produced AFTER subscribing.
+    {
+        let mgr = session_manager.lock().await;
+        if let Some(pane) = mgr.get_active_pane(&session_id) {
+            let sb = pane.scrollback();
+            let total = sb.line_count();
+            if total > 0 {
+                // Send last ~50 lines (roughly one screen)
+                let start = total.saturating_sub(50);
+                let lines = sb.get_lines(start, total - start);
+                let mut replay_data = Vec::new();
+                for line in &lines {
+                    replay_data.extend_from_slice(line);
+                    replay_data.push(b'\n');
+                }
+                if !replay_data.is_empty() {
+                    let resp = Response::SessionOutput { data: replay_data };
+                    let _ = write_message(&mut writer, &resp).await;
                 }
             }
-        });
+        }
+    }
 
-        // Read the next message from the client (non-blocking async pipe)
-        let input_task = read_message::<_, Request>(&mut reader);
-
+    // 5. Enter bidirectional streaming loop
+    loop {
         tokio::select! {
-            // ConPTY produced output — forward to client
-            output_result = output_task => {
+            // ConPTY output from drain thread via broadcast channel
+            output_result = output_rx.recv() => {
                 match output_result {
-                    Ok(Ok(data)) if !data.is_empty() => {
-                        // Capture output in scrollback buffer (brief lock)
-                        {
-                            let mut mgr = session_manager.lock().await;
-                            if let Some(pane) = mgr.get_active_pane_mut(&session_id) {
-                                pane.scrollback_mut().push_bytes(&data);
-                            }
-                        }
+                    Ok(data) => {
                         let resp = Response::SessionOutput { data };
                         if let Err(e) = write_message(&mut writer, &resp).await {
                             warn!("Failed to send output to client: {}", e);
-                            break; // Client disconnected
+                            break;
                         }
                     }
-                    Ok(Ok(_)) => {
-                        // Empty read — ConPTY pipe closed (shell exited)
-                        info!("ConPTY output pipe closed for session {}", session_id);
-                        break;
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Client lagged behind by {} messages", n);
+                        // Continue — we'll catch up
                     }
-                    Ok(Err(e)) => {
-                        // ReadFile error — pipe broken (shell exited or crashed)
-                        info!("ConPTY read error for session {}: {}", session_id, e);
-                        break;
-                    }
-                    Err(e) => {
-                        error!("spawn_blocking panicked: {}", e);
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        info!("ConPTY output channel closed for session {}", session_id);
                         break;
                     }
                 }
             }
 
             // Client sent a message — process it
-            input_result = input_task => {
+            input_result = read_message::<_, Request>(&mut reader) => {
                 match input_result {
                     Ok(Request::SessionInput { data }) => {
-                        // Write input to ConPTY
+                        // Write input to ConPTY via spawn_blocking (anonymous pipes are sync)
                         let in_raw = pipe_in_raw;
-                        let write_result = tokio::task::spawn_blocking(move || -> Result<()> {
+                        let write_result = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
                             let handle = HANDLE(in_raw as *mut _);
                             let mut written: u32 = 0;
                             unsafe {
@@ -381,7 +375,7 @@ where
                                 break;
                             }
                             Err(e) => {
-                                error!("spawn_blocking panicked on write: {}", e);
+                                error!("ConPTY write task panicked: {}", e);
                                 break;
                             }
                         }
@@ -486,7 +480,10 @@ where
         }
     }
 
-    // 4. Clean up: decrement attached clients, send Ok response for detach
+    // 5. Clean up: drop broadcast subscription, decrement attached clients
+    drop(output_rx);
+
+    // Decrement attached clients, send Ok response for detach
     {
         let mut mgr = session_manager.lock().await;
         mgr.detach_client(&session_id);
@@ -499,6 +496,69 @@ where
 
     info!("Attach handler finished for session {}", session_id);
     Ok(())
+}
+
+/// Start a background thread that continuously reads ConPTY output for a session.
+///
+/// This prevents the output pipe from filling up (which would block the shell).
+/// Output is sent to the session's broadcast channel (for attached clients) and
+/// stored in the scrollback buffer.
+pub fn start_conpty_drain(
+    mgr: &SessionManager,
+    session_id: &str,
+    session_manager: Arc<Mutex<SessionManager>>,
+) {
+    let session = match mgr.get_session(session_id) {
+        Some(s) => s,
+        None => return,
+    };
+
+    // Get the active pane's output pipe handle
+    let active_id = session.active_pane;
+    let pipe_out_raw = match session.panes.iter().find(|p| p.id() == active_id) {
+        Some(pane) => pane.conpty().pipe_out_handle().0 as isize,
+        None => return,
+    };
+
+    // Get the broadcast sender
+    let output_tx = match &session.output_tx {
+        Some(tx) => tx.clone(),
+        None => return,
+    };
+
+    let sid = session_id.to_string();
+
+    // Spawn a permanent reader thread for this session
+    std::thread::spawn(move || {
+        let handle = HANDLE(pipe_out_raw as *mut _);
+        info!("ConPTY drain thread started for session {}", sid);
+        loop {
+            let mut buf = vec![0u8; 4096];
+            let mut bytes_read: u32 = 0;
+            let result = unsafe {
+                ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
+            };
+            match result {
+                Ok(()) if bytes_read > 0 => {
+                    buf.truncate(bytes_read as usize);
+
+                    // Store in scrollback (best-effort — lock briefly)
+                    if let Ok(mut mgr) = session_manager.try_lock() {
+                        if let Some(pane) = mgr.get_active_pane_mut(&sid) {
+                            pane.scrollback_mut().push_bytes(&buf);
+                        }
+                    }
+
+                    // Broadcast to any attached clients (ignore if no receivers)
+                    let _ = output_tx.send(buf);
+                }
+                _ => {
+                    info!("ConPTY drain thread ending for session {} (pipe closed)", sid);
+                    break;
+                }
+            }
+        }
+    });
 }
 
 /// Build a scroll mode response from the scrollback buffer.

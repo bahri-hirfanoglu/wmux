@@ -174,6 +174,15 @@ pub async fn run_daemon() -> Result<()> {
 
     let session_manager = Arc::new(Mutex::new(manager));
 
+    // Start drain threads for any recovered sessions
+    {
+        let mgr = session_manager.lock().await;
+        let session_ids: Vec<String> = mgr.session_ids();
+        for sid in session_ids {
+            crate::ipc::server::start_conpty_drain(&mgr, &sid, session_manager.clone());
+        }
+    }
+
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 

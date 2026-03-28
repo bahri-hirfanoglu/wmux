@@ -18,6 +18,9 @@ pub struct Session {
     pub active_pane: u32,
     /// Number of clients currently attached to this session.
     pub attached_clients: u32,
+    /// Broadcast channel for ConPTY output — clients subscribe when attaching.
+    /// The drain thread continuously reads ConPTY and sends here.
+    pub output_tx: Option<tokio::sync::broadcast::Sender<Vec<u8>>>,
 }
 
 /// Manages all active terminal sessions.
@@ -61,6 +64,9 @@ impl SessionManager {
             pane_count: 1,
         };
 
+        // Create broadcast channel for ConPTY output (256 message buffer)
+        let (output_tx, _) = tokio::sync::broadcast::channel(256);
+
         self.sessions.insert(
             id.clone(),
             Session {
@@ -70,6 +76,7 @@ impl SessionManager {
                 panes: vec![pane],
                 active_pane: 0,
                 attached_clients: 0,
+                output_tx: Some(output_tx),
             },
         );
 
@@ -246,6 +253,11 @@ impl SessionManager {
         self.sessions.len() as u32
     }
 
+    /// Get all session IDs.
+    pub fn session_ids(&self) -> Vec<String> {
+        self.sessions.keys().cloned().collect()
+    }
+
     /// Get a reference to a session by ID.
     #[allow(dead_code)]
     pub fn get_session(&self, id: &str) -> Option<&Session> {
@@ -306,6 +318,7 @@ impl SessionManager {
 
         // Wrap the restored ConPTY in a Pane
         let pane = Pane::from_conpty(0, conpty);
+        let (output_tx, _) = tokio::sync::broadcast::channel(256);
 
         self.sessions.insert(
             id.clone(),
@@ -316,6 +329,7 @@ impl SessionManager {
                 panes: vec![pane],
                 active_pane: 0,
                 attached_clients: 0,
+                output_tx: Some(output_tx),
             },
         );
     }
