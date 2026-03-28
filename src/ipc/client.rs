@@ -178,13 +178,16 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // 4. Set console codepage to UTF-8 so ConPTY output renders correctly
+    // 4. Print attach banner before entering raw mode
+    eprintln!("\x1b[36m[wmux] attached to session {} (Ctrl+B d to detach)\x1b[0m", session_id);
+
+    // 5. Set console codepage to UTF-8 so ConPTY output renders correctly
     let _cp_guard = set_utf8_codepage();
 
-    // 5. Put the local terminal into raw mode
+    // 6. Put the local terminal into raw mode
     let _raw_guard = enter_raw_mode()?;
 
-    // 6. Get stdout handle for writing output
+    // 7. Get stdout handle for writing output
     let stdout_handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE)? };
 
     // Enable virtual terminal processing on stdout for ANSI escape sequences
@@ -196,15 +199,6 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
             stdout_mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
         );
     }
-
-    // Get terminal size for status bar
-    let (term_cols, term_rows) = get_terminal_size();
-
-    // Draw status bar on last line, set scroll region above it
-    draw_status_bar(stdout_handle, session_id, term_cols, term_rows);
-    let scroll_region = format!("\x1b[1;{}r", term_rows - 1);
-    write_bytes_to_stdout(stdout_handle, scroll_region.as_bytes());
-    write_bytes_to_stdout(stdout_handle, b"\x1b[H"); // cursor home
 
     // Get stdin handle for reading input
     let stdin_handle = unsafe { GetStdHandle(STD_INPUT_HANDLE)? };
@@ -259,11 +253,6 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
             stdin_result = stdin_rx.recv() => {
                 match stdin_result {
                     Some(data) if !data.is_empty() => {
-                        // Debug: log raw stdin bytes to file
-                        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("wmux-debug.log") {
-                            use std::io::Write;
-                            let _ = writeln!(f, "stdin: {:02x?} (prefix_active={})", &data, prefix_active);
-                        }
                         let mut to_send: Vec<u8> = Vec::new();
                         let mut should_detach = false;
                         let mut i = 0;
@@ -432,12 +421,7 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // Clean up — reset scroll region, restore console mode
-    // ESC[r = reset scroll region to full screen
-    write_bytes_to_stdout(stdout_handle, b"\x1b[r");
-    // Clear status bar line
-    let clear_status = format!("\x1b[{};1H\x1b[2K", term_rows);
-    write_bytes_to_stdout(stdout_handle, clear_status.as_bytes());
+    // Clean up — restore console mode
     drop(_raw_guard);
     drop(_cp_guard);
     drop(stdin_rx);
@@ -886,42 +870,5 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
             stdin_handle,
             original_mode,
         })
-    }
-}
-
-/// Get terminal size (columns, rows).
-fn get_terminal_size() -> (u16, u16) {
-    unsafe {
-        let handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap_or(HANDLE::default());
-        let mut info = std::mem::zeroed::<windows::Win32::System::Console::CONSOLE_SCREEN_BUFFER_INFO>();
-        if windows::Win32::System::Console::GetConsoleScreenBufferInfo(handle, &mut info).is_ok() {
-            let cols = (info.srWindow.Right - info.srWindow.Left + 1) as u16;
-            let rows = (info.srWindow.Bottom - info.srWindow.Top + 1) as u16;
-            (cols, rows)
-        } else {
-            (120, 30) // fallback
-        }
-    }
-}
-
-/// Draw tmux-style status bar on the last line of the terminal.
-fn draw_status_bar(stdout_handle: HANDLE, session_id: &str, cols: u16, rows: u16) {
-    // Move to last line, clear it, draw green background status bar
-    let status_text = format!("[wmux] session:{} | Ctrl+B d:detach", session_id);
-    let padding = cols as usize - status_text.len().min(cols as usize);
-    let bar = format!(
-        "\x1b[{};1H\x1b[42;30m{}{}\x1b[0m",
-        rows,
-        status_text,
-        " ".repeat(padding),
-    );
-    write_bytes_to_stdout(stdout_handle, bar.as_bytes());
-}
-
-/// Synchronously write bytes to stdout (used outside async context).
-fn write_bytes_to_stdout(stdout_handle: HANDLE, data: &[u8]) {
-    unsafe {
-        let mut written: u32 = 0;
-        let _ = WriteFile(stdout_handle, Some(data), Some(&mut written), None);
     }
 }
