@@ -22,3 +22,6 @@ windows = { version = "0.58", features = [
     "Win32_Security",
     "Win32_Storage_FileSystem",
 ] }
+
+[lints.clippy]
+needless_return = "allow"
