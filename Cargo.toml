@@ -2,7 +2,14 @@
 name = "wmux"
 version = "0.1.0"
 edition = "2021"
-description = "Terminal multiplexer for Windows"
+description = "A native Windows terminal multiplexer — tmux for Windows"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bahri-hirfanoglu/wmux"
+homepage = "https://github.com/bahri-hirfanoglu/wmux"
+readme = "README.md"
+authors = ["Bahri Hirfanoglu"]
+keywords = ["terminal", "multiplexer", "tmux", "windows", "conpty"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
