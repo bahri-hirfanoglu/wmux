@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The daemon can spawn and manage a shell process through ConPTY on Windows 10 1809+
   4. The daemon recovers its state and restarts child processes after an unexpected crash or restart
   5. `wmux` binary exists as a single self-contained executable that can reach the daemon
-**Plans:** 4 plans
+**Plans:** 3/4 plans executed
 
 Plans:
 - [ ] 01-01-PLAN.md — Project scaffold, CLI, and daemon lifecycle (start/stop/status)
@@ -65,6 +65,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Daemon Foundation | 0/4 | Planned | - |
+| 1. Daemon Foundation | 3/4 | In Progress|  |
 | 2. Session and Pane Core | 0/TBD | Not started | - |
 | 3. Configuration and Polish | 0/TBD | Not started | - |

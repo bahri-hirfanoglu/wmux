@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Daemon
 
 - [x] **DAEMON-01**: wmux-daemon runs as a background process, independent of any terminal window
-- [ ] **DAEMON-02**: Daemon manages all active sessions and their child processes
+- [x] **DAEMON-02**: Daemon manages all active sessions and their child processes
 - [ ] **DAEMON-03**: Daemon recovers sessions after unexpected crash or restart
 - [x] **DAEMON-04**: Daemon communicates with clients via Named Pipes (\\.\pipe\wmux-*)
 
@@ -48,7 +48,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **INTG-01**: wmux leverages Windows Terminal Pane API for rendering
 - [ ] **INTG-02**: Pane splits and layout are managed through WT's native pane system
-- [ ] **INTG-03**: wmux works on Windows 10 1809+ (ConPTY requirement)
+- [x] **INTG-03**: wmux works on Windows 10 1809+ (ConPTY requirement)
 
 ## v2 Requirements
 
@@ -98,11 +98,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DAEMON-01 | Phase 1 | Complete |
-| DAEMON-02 | Phase 1 | Pending |
+| DAEMON-02 | Phase 1 | Complete |
 | DAEMON-03 | Phase 1 | Pending |
 | DAEMON-04 | Phase 1 | Complete |
 | CLI-01 | Phase 1 | Complete |
-| INTG-03 | Phase 1 | Pending |
+| INTG-03 | Phase 1 | Complete |
 | SESS-01 | Phase 2 | Pending |
 | SESS-02 | Phase 2 | Pending |
 | SESS-03 | Phase 2 | Pending |
