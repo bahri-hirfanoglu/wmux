@@ -302,24 +302,14 @@ where
         }
     };
 
-    // 4. Set wmux-aware prompt and trigger redraw.
-    //    Sends a PowerShell command to prepend [wmux:session] to the prompt,
-    //    then a carriage return to show it immediately.
+    // 4. Send a carriage return to trigger prompt redraw on attach.
     {
         let in_raw = pipe_in_raw;
-        let sid = session_id.clone();
         let _ = tokio::task::spawn_blocking(move || {
             let handle = HANDLE(in_raw as *mut _);
             let mut written: u32 = 0;
-            // Override PowerShell prompt to show wmux prefix.
-            // The command sets the prompt function, then clears the screen
-            // so the raw command text isn't visible to the user.
-            let prompt_cmd = format!(
-                "function prompt {{ Write-Host '[wmux:{}]' -NoNewline -ForegroundColor Cyan; return \" $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) \" }}; Clear-Host\r",
-                sid
-            );
             unsafe {
-                let _ = WriteFile(handle, Some(prompt_cmd.as_bytes()), Some(&mut written), None);
+                let _ = WriteFile(handle, Some(b"\r"), Some(&mut written), None);
             }
         }).await;
     }
