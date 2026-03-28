@@ -56,9 +56,13 @@ impl ConPtySession {
             let mut output_read = HANDLE::default();
             let mut output_write = HANDLE::default();
 
-            CreatePipe(&mut input_read, &mut input_write, None, 0)
+            // Use 1MB pipe buffers to prevent shell blocking when nobody is reading output.
+            // Without this, powershell's startup prompt fills the default 4KB buffer and
+            // blocks indefinitely, making attach appear frozen.
+            const PIPE_BUFFER_SIZE: u32 = 1024 * 1024;
+            CreatePipe(&mut input_read, &mut input_write, None, PIPE_BUFFER_SIZE)
                 .context("Failed to create input pipe pair")?;
-            CreatePipe(&mut output_read, &mut output_write, None, 0)
+            CreatePipe(&mut output_read, &mut output_write, None, PIPE_BUFFER_SIZE)
                 .context("Failed to create output pipe pair")?;
 
             // 2. Create pseudo console
@@ -83,11 +87,14 @@ impl ConPtySession {
             InitializeProcThreadAttributeList(attr_list, 1, 0, &mut attr_list_size)
                 .context("Failed to initialize proc thread attribute list")?;
 
+            // CRITICAL: lpValue must be the HPCON value itself (it's an opaque handle),
+            // NOT a pointer to it. HPCON.0 is already a pointer-sized value.
+            // Passing &hpc (pointer-to-pointer) causes STATUS_DLL_INIT_FAILED (0xC0000142).
             UpdateProcThreadAttribute(
                 attr_list,
                 0,
                 PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE as usize,
-                Some(&hpc.0 as *const _ as *const _),
+                Some(hpc.0 as *const _),
                 mem::size_of::<HPCON>(),
                 None,
                 None,
@@ -119,6 +126,11 @@ impl ConPtySession {
             // 5. Create the child process
             let mut proc_info = PROCESS_INFORMATION::default();
 
+            // IMPORTANT: When using EXTENDED_STARTUPINFO_PRESENT, Windows expects
+            // lpStartupInfo to point to the STARTUPINFOEXW struct. We cast the
+            // pointer to &STARTUPINFOW since that's what the Rust binding expects,
+            // but the actual memory layout includes lpAttributeList right after.
+            let startup_ptr = &startup_info as *const STARTUPINFOEXW as *const STARTUPINFOW;
             CreateProcessW(
                 None,
                 windows::core::PWSTR(cmd_line.as_mut_ptr()),
@@ -128,16 +140,38 @@ impl ConPtySession {
                 EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT,
                 None,
                 None,
-                &startup_info.StartupInfo as *const STARTUPINFOW,
+                startup_ptr,
                 &mut proc_info,
             )
             .context("Failed to create shell process")?;
 
             let process_id = proc_info.dwProcessId;
 
-            // 6. Close the child-side pipe ends — daemon keeps input_write and output_read
+            // Close the pipe ends that were given to CreatePseudoConsole.
+            // ConPTY internally duplicates these handles, so closing our copies is safe
+            // and necessary to avoid handle leaks.
             let _ = CloseHandle(input_read);
             let _ = CloseHandle(output_write);
+
+            // 7. Verify the child process is still alive after a brief pause.
+            //    If the process exits immediately, ConPTY setup likely failed.
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let alive_check = WaitForSingleObject(proc_info.hProcess, 0);
+            if alive_check != WAIT_TIMEOUT {
+                // Process already exited — get exit code for diagnostics
+                let mut exit_code: u32 = 0;
+                let _ = windows::Win32::System::Threading::GetExitCodeProcess(
+                    proc_info.hProcess,
+                    &mut exit_code,
+                );
+                let _ = CloseHandle(proc_info.hProcess);
+                let _ = CloseHandle(proc_info.hThread);
+                anyhow::bail!(
+                    "Shell '{}' exited immediately (exit code: {}). ConPTY may not be working correctly.",
+                    shell_cmd,
+                    exit_code
+                );
+            }
 
             info!(
                 "ConPTY session created: shell='{}', pid={}, cols={}, rows={}",

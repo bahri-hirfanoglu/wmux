@@ -177,10 +177,13 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         }
     }
 
-    // 4. Put the local terminal into raw mode
+    // 4. Set console codepage to UTF-8 so ConPTY output renders correctly
+    let _cp_guard = set_utf8_codepage();
+
+    // 5. Put the local terminal into raw mode
     let _raw_guard = enter_raw_mode()?;
 
-    // 5. Get stdout handle for writing output
+    // 6. Get stdout handle for writing output
     let stdout_handle = unsafe { GetStdHandle(STD_OUTPUT_HANDLE)? };
 
     // Enable virtual terminal processing on stdout for ANSI escape sequences
@@ -793,6 +796,36 @@ async fn write_scroll_status(stdout_handle: HANDLE, offset: usize, total: usize)
         total
     );
     write_to_stdout(stdout_handle, status.as_bytes()).await;
+}
+
+/// Guard that restores the original console codepage when dropped.
+struct CodepageGuard {
+    original_input_cp: u32,
+    original_output_cp: u32,
+}
+
+impl Drop for CodepageGuard {
+    fn drop(&mut self) {
+        unsafe {
+            windows::Win32::System::Console::SetConsoleCP(self.original_input_cp);
+            windows::Win32::System::Console::SetConsoleOutputCP(self.original_output_cp);
+        }
+    }
+}
+
+/// Set console input and output codepage to UTF-8 (65001).
+/// Returns a guard that restores original codepages on drop.
+fn set_utf8_codepage() -> CodepageGuard {
+    unsafe {
+        let original_input_cp = windows::Win32::System::Console::GetConsoleCP();
+        let original_output_cp = windows::Win32::System::Console::GetConsoleOutputCP();
+        windows::Win32::System::Console::SetConsoleCP(65001);
+        windows::Win32::System::Console::SetConsoleOutputCP(65001);
+        CodepageGuard {
+            original_input_cp,
+            original_output_cp,
+        }
+    }
 }
 
 /// Enter raw console mode, returning a guard that restores the original mode on drop.

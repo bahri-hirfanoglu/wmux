@@ -266,6 +266,14 @@ where
 
         match handles {
             Some((pin, pout)) => {
+                // Debug: log handle values and process status
+                let active_pane = session.panes.iter().find(|p| p.id() == active_id);
+                if let Some(pane) = active_pane {
+                    info!(
+                        "Attach: session={}, pane={}, pid={}, alive={}, pipe_in={:#x}, pipe_out={:#x}",
+                        session_id, active_id, pane.process_id(), pane.is_alive(), pin, pout
+                    );
+                }
                 mgr.attach_client(&session_id)?;
                 (pin, pout, pane_count)
             }
@@ -298,12 +306,18 @@ where
             let handle = HANDLE(out_raw as *mut _);
             let mut tmp = vec![0u8; 4096];
             let mut bytes_read: u32 = 0;
-            unsafe {
+            let read_result = unsafe {
                 ReadFile(handle, Some(&mut tmp), Some(&mut bytes_read), None)
-                    .context("ReadFile from ConPTY output pipe failed")?;
+            };
+            match read_result {
+                Ok(()) => {
+                    tmp.truncate(bytes_read as usize);
+                    Ok(tmp)
+                }
+                Err(e) => {
+                    Err(anyhow::anyhow!("ReadFile from ConPTY output pipe failed (handle={:#x}): {}", out_raw, e))
+                }
             }
-            tmp.truncate(bytes_read as usize);
-            Ok(tmp)
         });
 
         // Read the next message from the client (non-blocking async pipe)
