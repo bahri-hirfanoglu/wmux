@@ -25,11 +25,80 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::KillServer) => {
             daemon::lifecycle::kill_server().await?;
         }
-        Some(Commands::New)
-        | Some(Commands::Ls)
-        | Some(Commands::Attach)
+        Some(Commands::New) => {
+            let pipe_name = paths::control_pipe();
+            let request = wmux::ipc::protocol::Request::NewSession { name: None };
+            match wmux::ipc::client::send_request(&pipe_name, &request).await {
+                Ok(wmux::ipc::protocol::Response::Ok { message }) => {
+                    println!("{}", message);
+                }
+                Ok(wmux::ipc::protocol::Response::Error { message }) => {
+                    eprintln!("Error: {}", message);
+                    std::process::exit(1);
+                }
+                Ok(other) => {
+                    eprintln!("Unexpected response: {:?}", other);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("Failed to create session: {}. Is the daemon running?", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some(Commands::Ls) => {
+            let pipe_name = paths::control_pipe();
+            let request = wmux::ipc::protocol::Request::ListSessions;
+            match wmux::ipc::client::send_request(&pipe_name, &request).await {
+                Ok(wmux::ipc::protocol::Response::SessionList { sessions }) => {
+                    if sessions.is_empty() {
+                        println!("No active sessions");
+                    } else {
+                        println!("{:<6} {:<20} {}", "ID", "NAME", "CREATED");
+                        for s in &sessions {
+                            println!(
+                                "{:<6} {:<20} {}",
+                                s.id,
+                                s.name.as_deref().unwrap_or("-"),
+                                s.created_at
+                            );
+                        }
+                        println!("\n{} session(s)", sessions.len());
+                    }
+                }
+                Ok(other) => {
+                    eprintln!("Unexpected response: {:?}", other);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("Failed to list sessions: {}. Is the daemon running?", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some(Commands::KillSession { id }) => {
+            let pipe_name = paths::control_pipe();
+            let request = wmux::ipc::protocol::Request::KillSession { id };
+            match wmux::ipc::client::send_request(&pipe_name, &request).await {
+                Ok(wmux::ipc::protocol::Response::Ok { message }) => {
+                    println!("{}", message);
+                }
+                Ok(wmux::ipc::protocol::Response::Error { message }) => {
+                    eprintln!("Error: {}", message);
+                    std::process::exit(1);
+                }
+                Ok(other) => {
+                    eprintln!("Unexpected response: {:?}", other);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("Failed to kill session: {}. Is the daemon running?", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Some(Commands::Attach)
         | Some(Commands::Detach)
-        | Some(Commands::KillSession)
         | Some(Commands::KillPane)
         | Some(Commands::Split) => {
             eprintln!("Not yet implemented");

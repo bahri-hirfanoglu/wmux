@@ -1,7 +1,9 @@
 use std::fs;
 use std::io::Write;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use tokio::sync::Mutex;
 use tracing::info;
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{
@@ -125,14 +127,18 @@ pub async fn run_daemon() -> Result<()> {
 
     info!("wmux daemon started (pid: {})", pid);
 
+    // Create session manager
+    let session_manager = Arc::new(Mutex::new(wmux::session::SessionManager::new()));
+
     // Create shutdown channel
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
     // Start the control server
     let pipe_name = paths::control_pipe();
+    let sm = session_manager.clone();
     let server_handle = tokio::spawn(async move {
         if let Err(e) =
-            wmux::ipc::server::ControlServer::start(&pipe_name, shutdown_rx, shutdown_tx).await
+            wmux::ipc::server::ControlServer::start(&pipe_name, shutdown_rx, shutdown_tx, sm).await
         {
             tracing::error!("Control server error: {}", e);
         }

@@ -38,7 +38,10 @@ pub enum Commands {
 
     /// Kill a session
     #[command(name = "kill-session")]
-    KillSession,
+    KillSession {
+        /// Session ID to kill
+        id: String,
+    },
 
     /// Kill a pane
     #[command(name = "kill-pane")]
