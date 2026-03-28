@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wmux — A Native Windows Terminal Multiplexer</title>
+<meta name="description" content="wmux is a native Windows terminal multiplexer built in Rust. Persistent sessions, split panes, tmux-style keybindings — no WSL required.">
+<meta name="keywords" content="wmux, terminal multiplexer, tmux, Windows, Rust, ConPTY, terminal, CLI">
+<meta name="author" content="Bahri Hirfanoglu">
+<meta property="og:title" content="wmux — tmux for Windows">
+<meta property="og:description" content="A native Windows terminal multiplexer built in Rust. Persistent sessions, split panes, and tmux-style keybindings.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://github.com/bahri-hirfanoglu/wmux">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1117;--bg-card:#161b22;--bg-card-hover:#1c2129;
+  --border:#30363d;--border-light:#484f58;
+  --text:#e6edf3;--text-muted:#8b949e;--text-dim:#6e7681;
+  --green:#00ff41;--green-dim:#00cc33;--green-glow:rgba(0,255,65,.15);
+  --cyan:#58a6ff;--cyan-dim:#388bfd;
+  --orange:#f0883e;--purple:#bc8cff;
+  --font-mono:'JetBrains Mono',monospace;
+  --font-sans:'Inter',system-ui,sans-serif;
+}
+html{scroll-behavior:smooth;scrollbar-color:var(--border) var(--bg)}
+body{background:var(--bg);color:var(--text);font-family:var(--font-sans);line-height:1.6;overflow-x:hidden}
+a{color:var(--cyan);text-decoration:none;transition:color .2s}
+a:hover{color:var(--green)}
+::selection{background:var(--green);color:var(--bg)}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(13,17,23,.85);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:.75rem 0;transition:box-shadow .3s}
+nav.scrolled{box-shadow:0 4px 24px rgba(0,0,0,.4)}
+.nav-inner{max-width:1100px;margin:0 auto;padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.nav-logo{font-family:var(--font-mono);font-weight:700;font-size:1.2rem;color:var(--green);text-shadow:0 0 10px var(--green-glow)}
+.nav-links{display:flex;gap:1.5rem;align-items:center}
+.nav-links a{color:var(--text-muted);font-size:.875rem;font-weight:500;transition:color .2s}
+.nav-links a:hover{color:var(--green)}
+.nav-gh{display:inline-flex;align-items:center;gap:.4rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.35rem .75rem;font-size:.8rem;color:var(--text)!important;transition:border-color .2s,background .2s}
+.nav-gh:hover{border-color:var(--green);background:var(--bg-card-hover)}
+.nav-gh svg{width:16px;height:16px;fill:var(--text)}
+.hamburger{display:none;background:none;border:none;color:var(--text);font-size:1.5rem;cursor:pointer}
+
+/* SECTIONS */
+section{padding:5rem 1.5rem}
+.container{max-width:1100px;margin:0 auto}
+.section-label{font-family:var(--font-mono);font-size:.8rem;color:var(--green);text-transform:uppercase;letter-spacing:2px;margin-bottom:.5rem}
+.section-title{font-size:2rem;font-weight:700;margin-bottom:1rem}
+.section-desc{color:var(--text-muted);max-width:600px;margin-bottom:3rem}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding-top:6rem;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(0,255,65,.06) 0%,transparent 70%);pointer-events:none}
+.hero-ascii{font-family:var(--font-mono);font-size:clamp(1rem,3vw,1.6rem);color:var(--green);line-height:1.3;margin-bottom:1.5rem;text-shadow:0 0 20px var(--green-glow);white-space:pre;display:inline-block;letter-spacing:1px}
+.hero h2{font-size:clamp(1.2rem,3vw,1.5rem);font-weight:400;color:var(--text-muted);margin-bottom:.5rem}
+.hero .tagline{font-family:var(--font-mono);font-size:1rem;color:var(--cyan);margin-bottom:2.5rem}
+.hero-buttons{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-bottom:3rem}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.7rem 1.5rem;border-radius:8px;font-size:.9rem;font-weight:600;transition:all .2s;border:1px solid transparent;cursor:pointer}
+.btn-primary{background:var(--green);color:var(--bg);border-color:var(--green)}
+.btn-primary:hover{background:transparent;color:var(--green);box-shadow:0 0 20px var(--green-glow)}
+.btn-secondary{background:transparent;color:var(--text);border-color:var(--border)}
+.btn-secondary:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn svg{width:18px;height:18px}
+.hero-install{font-family:var(--font-mono);font-size:.9rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.6rem 1.2rem;display:inline-flex;align-items:center;gap:.75rem;cursor:pointer;transition:border-color .2s;position:relative}
+.hero-install:hover{border-color:var(--green)}
+.hero-install code{color:var(--green)}
+.hero-install .copy-icon{color:var(--text-muted);transition:color .2s}
+.hero-install:hover .copy-icon{color:var(--green)}
+.hero-install .copied-toast{position:absolute;top:-2rem;left:50%;transform:translateX(-50%);font-size:.75rem;color:var(--green);opacity:0;transition:opacity .3s}
+
+/* FEATURES */
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.25rem}
+.feature-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.75rem;transition:border-color .3s,transform .3s,box-shadow .3s}
+.feature-card:hover{border-color:var(--green);transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.feature-icon{font-size:1.8rem;margin-bottom:.75rem;display:block}
+.feature-card h3{font-size:1.05rem;margin-bottom:.5rem;font-weight:600}
+.feature-card p{color:var(--text-muted);font-size:.875rem;line-height:1.6}
+
+/* TERMINAL DEMO */
+.terminal{background:#0a0e14;border:1px solid var(--border);border-radius:12px;overflow:hidden;font-family:var(--font-mono);font-size:.85rem;max-width:720px;margin:0 auto;box-shadow:0 16px 48px rgba(0,0,0,.4)}
+.terminal-bar{display:flex;align-items:center;gap:.5rem;padding:.6rem 1rem;background:#161b22;border-bottom:1px solid var(--border)}
+.terminal-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.terminal-dot.r{background:#ff5f56}.terminal-dot.y{background:#ffbd2e}.terminal-dot.g{background:#27c93f}
+.terminal-bar span{color:var(--text-muted);font-size:.75rem;margin-left:.5rem}
+.terminal-body{padding:1.25rem;line-height:1.8;min-height:280px}
+.terminal-body .prompt{color:var(--cyan)}
+.terminal-body .cmd{color:var(--green)}
+.terminal-body .output{color:var(--text-muted)}
+.terminal-body .cursor{display:inline-block;width:8px;height:1.1em;background:var(--green);vertical-align:text-bottom;animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.demo-line{opacity:0;transform:translateY(4px);transition:opacity .4s,transform .4s}
+.demo-line.visible{opacity:1;transform:translateY(0)}
+
+/* INSTALL */
+.install-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem}
+.install-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:1.75rem;position:relative}
+.install-card h3{font-family:var(--font-mono);font-size:.9rem;color:var(--green);margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+.install-card h3 .badge{font-size:.65rem;background:var(--green);color:var(--bg);padding:.15rem .5rem;border-radius:4px;font-weight:700}
+.code-block{background:#0a0e14;border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;font-family:var(--font-mono);font-size:.85rem;overflow-x:auto;position:relative;line-height:1.7}
+.code-block .comment{color:var(--text-dim)}
+.code-block .cmd-text{color:var(--green)}
+.copy-btn{position:absolute;top:.5rem;right:.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;padding:.3rem .5rem;cursor:pointer;color:var(--text-muted);font-size:.75rem;font-family:var(--font-mono);transition:all .2s}
+.copy-btn:hover{color:var(--green);border-color:var(--green)}
+
+/* KEYBINDINGS */
+.keybindings-table{width:100%;border-collapse:separate;border-spacing:0;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.keybindings-table thead th{background:#161b22;padding:.85rem 1.25rem;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);border-bottom:1px solid var(--border)}
+.keybindings-table tbody td{padding:.75rem 1.25rem;border-bottom:1px solid var(--border);font-size:.9rem}
+.keybindings-table tbody tr:last-child td{border-bottom:none}
+.keybindings-table tbody tr:hover{background:var(--bg-card-hover)}
+kbd{font-family:var(--font-mono);background:#0a0e14;border:1px solid var(--border);border-radius:4px;padding:.15rem .45rem;font-size:.8rem;color:var(--green);white-space:nowrap}
+
+/* ARCHITECTURE */
+.arch-wrapper{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:2rem;overflow-x:auto}
+.arch-diagram{font-family:var(--font-mono);font-size:clamp(.65rem,1.5vw,.85rem);line-height:1.6;color:var(--text);white-space:pre;text-align:center}
+.arch-diagram .highlight{color:var(--green)}
+.arch-diagram .dim{color:var(--text-muted)}
+.arch-desc{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-top:2rem}
+.arch-item{display:flex;gap:.75rem;align-items:flex-start}
+.arch-dot{width:8px;height:8px;border-radius:50%;margin-top:.5rem;flex-shrink:0}
+.arch-item h4{font-size:.9rem;margin-bottom:.2rem}
+.arch-item p{font-size:.8rem;color:var(--text-muted);line-height:1.5}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:3rem 1.5rem;text-align:center}
+.footer-links{display:flex;justify-content:center;gap:2rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.footer-links a{color:var(--text-muted);font-size:.875rem;display:inline-flex;align-items:center;gap:.4rem}
+.footer-links a:hover{color:var(--green)}
+.footer-links svg{width:16px;height:16px;fill:currentColor}
+.footer-copy{color:var(--text-dim);font-size:.8rem}
+.footer-copy a{color:var(--text-muted)}
+
+/* FADE-IN */
+.fade-in{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .nav-links .nav-link-text{display:none}
+  .hamburger{display:block}
+  .nav-links.mobile-open{display:flex;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:rgba(13,17,23,.97);padding:1rem 1.5rem;border-bottom:1px solid var(--border);gap:1rem}
+  .nav-links.mobile-open .nav-link-text{display:block}
+  section{padding:3.5rem 1rem}
+  .features-grid{grid-template-columns:1fr}
+  .install-grid{grid-template-columns:1fr}
+  .hero-ascii{font-size:.85rem}
+  .keybindings-table{font-size:.8rem}
+  .keybindings-table thead th,.keybindings-table tbody td{padding:.6rem .75rem}
+  .arch-desc{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">wmux</a>
+    <button class="hamburger" onclick="document.querySelector('.nav-links').classList.toggle('mobile-open')" aria-label="Menu">&#9776;</button>
+    <div class="nav-links">
+      <a href="#features" class="nav-link-text">Features</a>
+      <a href="#demo" class="nav-link-text">Demo</a>
+      <a href="#install" class="nav-link-text">Install</a>
+      <a href="#keybindings" class="nav-link-text">Keys</a>
+      <a href="#architecture" class="nav-link-text">Architecture</a>
+      <a href="https://github.com/bahri-hirfanoglu/wmux" target="_blank" class="nav-gh">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="container">
+    <div class="hero-ascii" aria-label="wmux">
+ ╦ ╦╔╦╗╦ ╦═╗ ╦
+ ║║║║║║║ ║╔╩╦╝
+ ╚╩╝╩ ╩╚═╝╩ ╚═</div>
+    <h2>A native Windows terminal multiplexer</h2>
+    <p class="tagline">tmux for Windows &mdash; built in Rust</p>
+    <div class="hero-buttons">
+      <a href="#install" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Install
+      </a>
+      <a href="https://github.com/bahri-hirfanoglu/wmux" target="_blank" class="btn btn-secondary">
+        <svg viewBox="0 0 16 16" fill="currentColor" width="18" height="18"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <div class="hero-install" onclick="copyToClipboard('cargo install wmux', this)" title="Click to copy">
+      <span style="color:var(--text-muted)">$</span>
+      <code>cargo install wmux</code>
+      <span class="copy-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      </span>
+      <span class="copied-toast">Copied!</span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <span class="section-label fade-in">Features</span>
+    <h2 class="section-title fade-in">Everything you need from a terminal multiplexer</h2>
+    <p class="section-desc fade-in">Built natively for Windows with zero dependencies on WSL or Cygwin.</p>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <span class="feature-icon">&#128268;</span>
+        <h3>Persistent Sessions</h3>
+        <p>Shell processes survive terminal closes. Close your window and come back later &mdash; everything is still running.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">&#128260;</span>
+        <h3>Detach / Reattach</h3>
+        <p>Disconnect from a session and reconnect at any time. Your running processes are never interrupted.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">&#9638;</span>
+        <h3>Split Panes</h3>
+        <p>Horizontal and vertical splits via Windows Terminal. Work on multiple tasks simultaneously in one window.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">&#9000;</span>
+        <h3>tmux Keybindings</h3>
+        <p>Familiar <kbd>Ctrl+B</kbd> prefix. If you know tmux, you already know wmux.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">&#9881;</span>
+        <h3>Background Daemon</h3>
+        <p>A lightweight background process manages all sessions and auto-starts when needed. Zero manual setup.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">&#11036;</span>
+        <h3>Native Windows</h3>
+        <p>Uses ConPTY and Named Pipes &mdash; pure Windows APIs. No WSL, no Cygwin, no MSYS2. Just Windows.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DEMO -->
+<section id="demo" style="background:rgba(22,27,34,.4)">
+  <div class="container">
+    <span class="section-label fade-in">Demo</span>
+    <h2 class="section-title fade-in">See it in action</h2>
+    <p class="section-desc fade-in">A typical wmux workflow &mdash; create, detach, and reattach to sessions.</p>
+    <div class="terminal fade-in">
+      <div class="terminal-bar">
+        <span class="terminal-dot r"></span>
+        <span class="terminal-dot y"></span>
+        <span class="terminal-dot g"></span>
+        <span>wmux &mdash; Windows Terminal</span>
+      </div>
+      <div class="terminal-body" id="demo-terminal">
+        <div class="demo-line"><span class="prompt">PS C:\&gt; </span><span class="cmd">wmux new</span></div>
+        <div class="demo-line"><span class="output">Session created: session-1</span></div>
+        <div class="demo-line"><span class="output">Attached to session-1</span></div>
+        <div class="demo-line">&nbsp;</div>
+        <div class="demo-line"><span class="output" style="color:var(--text-dim)"># Press Ctrl+B, d to detach</span></div>
+        <div class="demo-line"><span class="output">Detached from session-1</span></div>
+        <div class="demo-line">&nbsp;</div>
+        <div class="demo-line"><span class="prompt">PS C:\&gt; </span><span class="cmd">wmux ls</span></div>
+        <div class="demo-line"><span class="output">  ID          Created              Panes</span></div>
+        <div class="demo-line"><span class="output">  session-1   2025-06-15 14:32:01  1</span></div>
+        <div class="demo-line">&nbsp;</div>
+        <div class="demo-line"><span class="prompt">PS C:\&gt; </span><span class="cmd">wmux attach</span></div>
+        <div class="demo-line"><span class="output">Attached to session-1</span></div>
+        <div class="demo-line"><span class="prompt">PS C:\&gt; </span><span class="cursor"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALLATION -->
+<section id="install">
+  <div class="container">
+    <span class="section-label fade-in">Installation</span>
+    <h2 class="section-title fade-in">Get started in seconds</h2>
+    <p class="section-desc fade-in">Install wmux with Cargo or build from source.</p>
+    <div class="install-grid">
+      <div class="install-card fade-in">
+        <h3><span class="badge">Recommended</span> From crates.io</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyToClipboard('cargo install wmux', this)">Copy</button>
+          <span class="cmd-text">cargo install wmux</span>
+        </div>
+      </div>
+      <div class="install-card fade-in">
+        <h3>From source</h3>
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyToClipboard('git clone https://github.com/bahri-hirfanoglu/wmux.git\ncd wmux\ncargo build --release', this)">Copy</button>
+          <span class="cmd-text">git clone https://github.com/bahri-hirfanoglu/wmux.git</span><br>
+          <span class="cmd-text">cd wmux</span><br>
+          <span class="cmd-text">cargo build --release</span><br><br>
+          <span class="comment"># Binary: target\release\wmux.exe</span>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:2rem;padding:1rem 1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;font-size:.85rem;color:var(--text-muted)" class="fade-in">
+      <strong style="color:var(--orange)">Requirements:</strong> Windows 10 (1809+) or Windows 11 &bull; Windows Terminal (for split panes) &bull; Rust 1.70+ (to build from source)
+    </div>
+  </div>
+</section>
+
+<!-- KEY BINDINGS -->
+<section id="keybindings" style="background:rgba(22,27,34,.4)">
+  <div class="container">
+    <span class="section-label fade-in">Key Bindings</span>
+    <h2 class="section-title fade-in">tmux-style shortcuts</h2>
+    <p class="section-desc fade-in">All bindings use the <kbd>Ctrl+B</kbd> prefix. Press the prefix, release, then press the action key.</p>
+    <div class="fade-in" style="overflow-x:auto">
+      <table class="keybindings-table">
+        <thead>
+          <tr><th>Shortcut</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><kbd>Ctrl+B</kbd> &rarr; <kbd>d</kbd></td><td>Detach from the current session</td></tr>
+          <tr><td><kbd>Ctrl+B</kbd> &rarr; <kbd>"</kbd></td><td>Split pane horizontally (top/bottom)</td></tr>
+          <tr><td><kbd>Ctrl+B</kbd> &rarr; <kbd>%</kbd></td><td>Split pane vertically (left/right)</td></tr>
+          <tr><td><kbd>Ctrl+B</kbd> &rarr; <kbd>x</kbd></td><td>Kill the current pane</td></tr>
+          <tr><td><kbd>Ctrl+B</kbd> &rarr; <kbd>Arrow</kbd></td><td>Navigate between panes</td></tr>
+          <tr><td><kbd>Ctrl+B</kbd> &rarr; <kbd>Alt+Arrow</kbd></td><td>Resize the current pane</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="architecture">
+  <div class="container">
+    <span class="section-label fade-in">Architecture</span>
+    <h2 class="section-title fade-in">How it works</h2>
+    <p class="section-desc fade-in">wmux uses native Windows APIs for terminal emulation and inter-process communication.</p>
+    <div class="arch-wrapper fade-in">
+      <div class="arch-diagram">
+<span class="highlight">┌──────────────┐</span>         <span class="dim">Named Pipe</span>         <span class="highlight">┌──────────────────┐</span>         <span class="dim">ConPTY</span>          <span class="highlight">┌──────────────┐</span>
+<span class="highlight">│              │</span>      <span class="dim">(JSON / IPC)</span>       <span class="highlight">│                  │</span>      <span class="dim">(pseudo-tty)</span>      <span class="highlight">│              │</span>
+<span class="highlight">│  wmux  CLI   │</span><span class="dim"> ◄──────────────────► </span><span class="highlight">│   wmux  daemon   │</span><span class="dim"> ◄──────────────────► </span><span class="highlight">│  Shell       │</span>
+<span class="highlight">│  (client)    │</span>                       <span class="highlight">│   (background)   │</span>                       <span class="highlight">│  (cmd/pwsh)  │</span>
+<span class="highlight">└──────────────┘</span>                       <span class="highlight">└──────────────────┘</span>                       <span class="highlight">└──────────────┘</span></div>
+      <div class="arch-desc">
+        <div class="arch-item">
+          <span class="arch-dot" style="background:var(--green)"></span>
+          <div>
+            <h4>Client</h4>
+            <p>The <code>wmux</code> CLI sends commands to the daemon via Named Pipes using length-prefixed JSON messages.</p>
+          </div>
+        </div>
+        <div class="arch-item">
+          <span class="arch-dot" style="background:var(--cyan)"></span>
+          <div>
+            <h4>Daemon</h4>
+            <p>Long-running background process that manages sessions and panes, communicating with shell processes through ConPTY.</p>
+          </div>
+        </div>
+        <div class="arch-item">
+          <span class="arch-dot" style="background:var(--purple)"></span>
+          <div>
+            <h4>ConPTY</h4>
+            <p>Windows pseudo-terminal API (Windows 10 1809+) providing native terminal emulation without WSL or Cygwin.</p>
+          </div>
+        </div>
+        <div class="arch-item">
+          <span class="arch-dot" style="background:var(--orange)"></span>
+          <div>
+            <h4>Named Pipes</h4>
+            <p>Windows IPC mechanism for fast, reliable communication between the CLI client and the background daemon.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a href="https://github.com/bahri-hirfanoglu/wmux" target="_blank">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <a href="https://crates.io/crates/wmux" target="_blank">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M2.5 7.955V16.5l9 5.25v-8.545l-9-5.25zm10 13.795l9-5.25V7.955l-9 5.25v8.545zM12 2.25L3.11 7.43 12 12.61l8.89-5.18L12 2.25z"/></svg>
+        crates.io
+      </a>
+      <a href="https://github.com/bahri-hirfanoglu/wmux/blob/main/LICENSE-MIT" target="_blank">MIT License</a>
+      <a href="https://github.com/bahri-hirfanoglu/wmux/blob/main/LICENSE-APACHE" target="_blank">Apache-2.0</a>
+    </div>
+    <p class="footer-copy">
+      Built with Rust by <a href="https://github.com/bahri-hirfanoglu" target="_blank">Bahri Hirfanoglu</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+// Navbar scroll effect
+const nav = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// Close mobile menu on link click
+document.querySelectorAll('.nav-links a').forEach(a => {
+  a.addEventListener('click', () => {
+    document.querySelector('.nav-links').classList.remove('mobile-open');
+  });
+});
+
+// Copy to clipboard
+function copyToClipboard(text, el) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (el.classList.contains('hero-install')) {
+      const toast = el.querySelector('.copied-toast');
+      toast.style.opacity = '1';
+      setTimeout(() => toast.style.opacity = '0', 1500);
+    } else {
+      const orig = el.textContent;
+      el.textContent = 'Copied!';
+      el.style.color = 'var(--green)';
+      setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
+    }
+  });
+}
+
+// Intersection Observer for fade-in and demo lines
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach((entry, i) => {
+    if (entry.isIntersecting) {
+      if (entry.target.classList.contains('demo-line')) {
+        // Stagger demo lines
+        const lines = Array.from(entry.target.parentElement.children);
+        const idx = lines.indexOf(entry.target);
+        setTimeout(() => entry.target.classList.add('visible'), idx * 200);
+      } else {
+        entry.target.classList.add('visible');
+      }
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+document.querySelectorAll('.demo-line').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
