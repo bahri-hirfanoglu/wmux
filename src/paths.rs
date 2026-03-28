@@ -30,6 +30,14 @@ pub fn state_file() -> Result<PathBuf> {
     Ok(wmux_data_dir()?.join("state.json"))
 }
 
+/// Returns the path to the config file: %APPDATA%\wmux\config.toml
+/// Does NOT create the directory — config is optional, we only read if it exists.
+pub fn config_file() -> Result<PathBuf> {
+    let app_data = std::env::var("APPDATA")
+        .context("APPDATA environment variable not set")?;
+    Ok(PathBuf::from(app_data).join("wmux").join("config.toml"))
+}
+
 /// Returns the named pipe path for the control pipe: \\.\pipe\wmux-ctl
 pub fn control_pipe() -> String {
     r"\\.\pipe\wmux-ctl".to_string()
