@@ -35,9 +35,11 @@ const SCROLL_PAGE_SIZE: usize = 50;
 pub async fn ensure_daemon_running() -> Result<()> {
     let pipe_name = crate::paths::control_pipe();
 
-    // Try to connect to existing daemon
-    if ClientOptions::new().open(&pipe_name).is_ok() {
-        return Ok(());
+    // Try to connect to existing daemon — send a quick Ping to verify
+    if let Ok(resp) = send_request(&pipe_name, &Request::Ping).await {
+        if matches!(resp, Response::Pong) {
+            return Ok(());
+        }
     }
 
     // Daemon not running — auto-start it
