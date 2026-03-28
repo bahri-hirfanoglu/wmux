@@ -72,11 +72,7 @@ async fn main() -> anyhow::Result<()> {
                     exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    exit_error(
-                        &format!("unexpected response: {:?}", other),
-                        None,
-                        1,
-                    );
+                    exit_error(&format!("unexpected response: {:?}", other), None, 1);
                 }
                 Err(e) => {
                     exit_error(
@@ -117,11 +113,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 Ok(other) => {
-                    exit_error(
-                        &format!("unexpected response: {:?}", other),
-                        None,
-                        1,
-                    );
+                    exit_error(&format!("unexpected response: {:?}", other), None, 1);
                 }
                 Err(e) => {
                     exit_error(
@@ -143,11 +135,7 @@ async fn main() -> anyhow::Result<()> {
                     exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    exit_error(
-                        &format!("unexpected response: {:?}", other),
-                        None,
-                        1,
-                    );
+                    exit_error(&format!("unexpected response: {:?}", other), None, 1);
                 }
                 Err(e) => {
                     exit_error(
@@ -195,11 +183,7 @@ async fn main() -> anyhow::Result<()> {
                         sessions.last().unwrap().id.clone()
                     }
                     Ok(other) => {
-                        exit_error(
-                            &format!("unexpected response: {:?}", other),
-                            None,
-                            1,
-                        );
+                        exit_error(&format!("unexpected response: {:?}", other), None, 1);
                     }
                     Err(e) => {
                         exit_error(
@@ -213,9 +197,13 @@ async fn main() -> anyhow::Result<()> {
 
             // Set WMUX_SESSION_ID so child processes (like `wmux split`) know which session
             // Safety: we're in a single-threaded context here before entering the attach loop
-            unsafe { std::env::set_var("WMUX_SESSION_ID", &sid); }
+            unsafe {
+                std::env::set_var("WMUX_SESSION_ID", &sid);
+            }
             if let Some(pane_id) = pane {
-                unsafe { std::env::set_var("WMUX_PANE_ID", pane_id.to_string()); }
+                unsafe {
+                    std::env::set_var("WMUX_PANE_ID", pane_id.to_string());
+                }
             }
 
             match wmux::ipc::client::attach_session(&pipe_name, &sid).await {
@@ -234,11 +222,16 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Detach) => {
             exit_error(
                 "detach is performed via the Ctrl+B, d keybinding while attached to a session",
-                Some("Attach to a session first with 'wmux attach', then press Ctrl+B, d to detach"),
+                Some(
+                    "Attach to a session first with 'wmux attach', then press Ctrl+B, d to detach",
+                ),
                 2,
             );
         }
-        Some(Commands::Split { horizontal, vertical }) => {
+        Some(Commands::Split {
+            horizontal,
+            vertical,
+        }) => {
             if let Err(e) = wmux::wt::require_windows_terminal() {
                 exit_error(
                     &format!("Windows Terminal is required: {}", e),
@@ -279,7 +272,11 @@ async fn main() -> anyhow::Result<()> {
                 direction,
             };
             match wmux::ipc::client::send_request(&pipe_name, &request).await {
-                Ok(wmux::ipc::protocol::Response::PaneInfo { session_id, pane_id, pid: _ }) => {
+                Ok(wmux::ipc::protocol::Response::PaneInfo {
+                    session_id,
+                    pane_id,
+                    pid: _,
+                }) => {
                     // Build the attach command for the new WT pane
                     let exe_path = std::env::current_exe()
                         .unwrap_or_else(|_| std::path::PathBuf::from("wmux.exe"));
@@ -305,11 +302,7 @@ async fn main() -> anyhow::Result<()> {
                     exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    exit_error(
-                        &format!("unexpected response: {:?}", other),
-                        None,
-                        1,
-                    );
+                    exit_error(&format!("unexpected response: {:?}", other), None, 1);
                 }
                 Err(e) => {
                     exit_error(
@@ -362,11 +355,7 @@ async fn main() -> anyhow::Result<()> {
                     exit_error(&message, Some("Run 'wmux ls' to see active sessions"), 1);
                 }
                 Ok(other) => {
-                    exit_error(
-                        &format!("unexpected response: {:?}", other),
-                        None,
-                        1,
-                    );
+                    exit_error(&format!("unexpected response: {:?}", other), None, 1);
                 }
                 Err(e) => {
                     exit_error(

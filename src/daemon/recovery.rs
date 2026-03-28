@@ -98,15 +98,19 @@ pub fn save_state_to(state: &PersistedState, dir: &PathBuf) -> Result<()> {
     let state_path = dir.join("state.json");
     let tmp_path = dir.join("state.json.tmp");
 
-    let json = serde_json::to_string_pretty(state)
-        .context("Failed to serialize state to JSON")?;
+    let json = serde_json::to_string_pretty(state).context("Failed to serialize state to JSON")?;
 
     // Write to temp file first, then atomically rename
     fs::write(&tmp_path, &json)
         .with_context(|| format!("Failed to write temp state file: {}", tmp_path.display()))?;
 
-    fs::rename(&tmp_path, &state_path)
-        .with_context(|| format!("Failed to rename state file: {} -> {}", tmp_path.display(), state_path.display()))?;
+    fs::rename(&tmp_path, &state_path).with_context(|| {
+        format!(
+            "Failed to rename state file: {} -> {}",
+            tmp_path.display(),
+            state_path.display()
+        )
+    })?;
 
     debug!("State saved: {} sessions", state.sessions.len());
     Ok(())
@@ -188,10 +192,15 @@ pub fn recover_sessions(
             if alive { "alive" } else { "dead" }
         );
 
-        match crate::session::conpty::ConPtySession::new(first.cols, first.rows, Some(&first.shell)) {
+        match crate::session::conpty::ConPtySession::new(first.cols, first.rows, Some(&first.shell))
+        {
             Ok(conpty) => {
                 manager.restore_session(ps.id.clone(), ps.name.clone(), conpty);
-                if alive { recovered += 1; } else { respawned += 1; }
+                if alive {
+                    recovered += 1;
+                } else {
+                    respawned += 1;
+                }
             }
             Err(e) => {
                 warn!("Failed to recover session {}: {}", ps.id, e);
@@ -205,7 +214,9 @@ pub fn recover_sessions(
             let pane_alive = is_process_alive(pp.pid);
             info!(
                 "Session {} pane {}: pid {} ({}), spawning replacement",
-                ps.id, pp.id, pp.pid,
+                ps.id,
+                pp.id,
+                pp.pid,
                 if pane_alive { "alive" } else { "dead" }
             );
 
@@ -215,7 +226,11 @@ pub fn recover_sessions(
                         "Session {} pane {} recovered as pane {} (pid {})",
                         ps.id, pp.id, new_pane_id, new_pid
                     );
-                    if pane_alive { recovered += 1; } else { respawned += 1; }
+                    if pane_alive {
+                        recovered += 1;
+                    } else {
+                        respawned += 1;
+                    }
                 }
                 Err(e) => {
                     warn!(

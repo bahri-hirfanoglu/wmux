@@ -5,8 +5,8 @@ use anyhow::{Context, Result};
 /// Returns the wmux data directory: %LOCALAPPDATA%\wmux
 /// Creates the directory if it does not exist.
 pub fn wmux_data_dir() -> Result<PathBuf> {
-    let local_app_data = std::env::var("LOCALAPPDATA")
-        .context("LOCALAPPDATA environment variable not set")?;
+    let local_app_data =
+        std::env::var("LOCALAPPDATA").context("LOCALAPPDATA environment variable not set")?;
     let dir = PathBuf::from(local_app_data).join("wmux");
     if !dir.exists() {
         std::fs::create_dir_all(&dir)
@@ -33,8 +33,7 @@ pub fn state_file() -> Result<PathBuf> {
 /// Returns the path to the config file: %APPDATA%\wmux\config.toml
 /// Does NOT create the directory — config is optional, we only read if it exists.
 pub fn config_file() -> Result<PathBuf> {
-    let app_data = std::env::var("APPDATA")
-        .context("APPDATA environment variable not set")?;
+    let app_data = std::env::var("APPDATA").context("APPDATA environment variable not set")?;
     Ok(PathBuf::from(app_data).join("wmux").join("config.toml"))
 }
 

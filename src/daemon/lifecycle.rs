@@ -246,10 +246,7 @@ pub async fn daemon_status() -> Result<()> {
             match read_pid_file()? {
                 Some(pid) => {
                     if is_process_alive(pid) {
-                        println!(
-                            "Daemon is running (pid: {}, pipe not responding)",
-                            pid
-                        );
+                        println!("Daemon is running (pid: {}, pipe not responding)", pid);
                     } else {
                         remove_pid_file()?;
                         println!("Daemon is not running (cleaned stale PID file)");

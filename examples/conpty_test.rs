@@ -8,9 +8,7 @@ use std::time::Duration;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_TIMEOUT};
 use windows::Win32::Storage::FileSystem::ReadFile;
-use windows::Win32::System::Console::{
-    ClosePseudoConsole, CreatePseudoConsole, COORD, HPCON,
-};
+use windows::Win32::System::Console::{ClosePseudoConsole, CreatePseudoConsole, COORD, HPCON};
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, GetExitCodeProcess,
@@ -34,8 +32,10 @@ fn main() {
         CreatePipe(&mut output_read, &mut output_write, None, 1024 * 1024)
             .expect("CreatePipe output failed");
 
-        println!("Pipes created: input_read={:?}, input_write={:?}, output_read={:?}, output_write={:?}",
-            input_read, input_write, output_read, output_write);
+        println!(
+            "Pipes created: input_read={:?}, input_write={:?}, output_read={:?}, output_write={:?}",
+            input_read, input_write, output_read, output_write
+        );
 
         // 2. Create pseudo console
         let size = COORD { X: 80, Y: 24 };
@@ -64,7 +64,11 @@ fn main() {
         InitializeProcThreadAttributeList(attr_list, 1, 0, &mut attr_size)
             .expect("InitializeProcThreadAttributeList failed");
 
-        println!("HPCON value: {:#x}, size: {}", hpc.0, mem::size_of::<HPCON>());
+        println!(
+            "HPCON value: {:#x}, size: {}",
+            hpc.0,
+            mem::size_of::<HPCON>()
+        );
         println!("HPCON as ptr: {:?}", hpc.0 as *const std::ffi::c_void);
 
         // CRITICAL: lpValue must be the HPCON value itself (it's an opaque handle/pointer),

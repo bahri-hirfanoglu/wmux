@@ -5,13 +5,14 @@ use tracing::info;
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Storage::FileSystem::{ReadFile, WriteFile};
 use windows::Win32::System::Console::{
-    GetConsoleMode, GetStdHandle, SetConsoleMode, CONSOLE_MODE,
-    ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
-    ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-    ENABLE_WINDOW_INPUT, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    GetConsoleMode, GetStdHandle, SetConsoleMode, CONSOLE_MODE, ENABLE_ECHO_INPUT,
+    ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT,
+    ENABLE_VIRTUAL_TERMINAL_PROCESSING, ENABLE_WINDOW_INPUT, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
 };
 
-use super::protocol::{read_message, write_message, NavDirection, Request, Response, SplitDirection};
+use super::protocol::{
+    read_message, write_message, NavDirection, Request, Response, SplitDirection,
+};
 
 /// Result of handling a prefix key sequence.
 #[allow(dead_code)]
@@ -213,9 +214,9 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         let title = format!("wmux [session:{}] [panes:{}]\0", session_id, pane_count);
         let wide: Vec<u16> = title.encode_utf16().collect();
         unsafe {
-            let _ = windows::Win32::System::Console::SetConsoleTitleW(
-                windows::core::PCWSTR(wide.as_ptr()),
-            );
+            let _ = windows::Win32::System::Console::SetConsoleTitleW(windows::core::PCWSTR(
+                wide.as_ptr(),
+            ));
         }
     }
 
@@ -231,9 +232,7 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
         loop {
             let mut buf = vec![0u8; 256];
             let mut bytes_read: u32 = 0;
-            let result = unsafe {
-                ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None)
-            };
+            let result = unsafe { ReadFile(handle, Some(&mut buf), Some(&mut bytes_read), None) };
             match result {
                 Ok(()) if bytes_read > 0 => {
                     buf.truncate(bytes_read as usize);
@@ -449,10 +448,10 @@ pub async fn attach_session(pipe_name: &str, session_id: &str) -> Result<()> {
     }
 
     // Clean up — reset scroll region, clear status bar, restore console mode
-    write_bytes_to_stdout(stdout_handle, b"\x1b[r");  // reset scroll region
-    let clear_bar = format!("\x1b[{};1H\x1b[2K", term_rows);  // clear status bar line
+    write_bytes_to_stdout(stdout_handle, b"\x1b[r"); // reset scroll region
+    let clear_bar = format!("\x1b[{};1H\x1b[2K", term_rows); // clear status bar line
     write_bytes_to_stdout(stdout_handle, clear_bar.as_bytes());
-    write_bytes_to_stdout(stdout_handle, b"\x1b[H");  // cursor home
+    write_bytes_to_stdout(stdout_handle, b"\x1b[H"); // cursor home
     drop(_raw_guard);
     drop(_cp_guard);
     drop(stdin_rx);
@@ -490,7 +489,10 @@ async fn handle_prefix_arrow<W: tokio::io::AsyncWrite + Unpin>(
     session_id: &str,
     writer: &mut W,
 ) -> PrefixAction {
-    if let (Some(dir_str), Some(nav_dir)) = (arrow_letter_to_direction(letter), arrow_letter_to_nav(letter)) {
+    if let (Some(dir_str), Some(nav_dir)) = (
+        arrow_letter_to_direction(letter),
+        arrow_letter_to_nav(letter),
+    ) {
         // Tell WT to move focus visually
         if let Err(e) = crate::wt::wt_move_focus(dir_str) {
             info!("wt_move_focus failed: {}", e);
@@ -573,7 +575,8 @@ async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
         unsafe {
             let _ = WriteFile(handle, Some(prompt), Some(&mut written), None);
         }
-    }).await;
+    })
+    .await;
 
     // Read single byte for confirmation
     let confirm_result = tokio::task::spawn_blocking(move || -> Result<u8> {
@@ -585,7 +588,8 @@ async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
                 .context("ReadFile for confirmation failed")?;
         }
         Ok(buf[0])
-    }).await;
+    })
+    .await;
 
     match confirm_result {
         Ok(Ok(b'y')) | Ok(Ok(b'Y')) => {
@@ -608,7 +612,8 @@ async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
                 unsafe {
                     let _ = WriteFile(handle, Some(msg), Some(&mut written), None);
                 }
-            }).await;
+            })
+            .await;
         }
         _ => {
             // Cancelled — echo newline and continue
@@ -620,7 +625,8 @@ async fn handle_prefix_kill_pane<W: tokio::io::AsyncWrite + Unpin>(
                 unsafe {
                     let _ = WriteFile(handle, Some(msg), Some(&mut written), None);
                 }
-            }).await;
+            })
+            .await;
         }
     }
 }
@@ -658,7 +664,11 @@ async fn enter_scroll_mode<R, W>(
     // Read response with initial scrollback data
     let response: Result<Response, _> = read_message(reader).await;
     let (mut scroll_offset, mut total_lines) = match response {
-        Ok(Response::ScrollModeData { data, offset, total_lines }) => {
+        Ok(Response::ScrollModeData {
+            data,
+            offset,
+            total_lines,
+        }) => {
             // Clear screen and display scrollback content
             write_to_stdout(stdout_handle, b"\x1B[2J\x1B[H").await;
             write_to_stdout(stdout_handle, &data).await;
@@ -786,9 +796,7 @@ async fn enter_scroll_mode<R, W>(
 
                 if let Some(target) = new_offset {
                     // Clamp offset to valid range
-                    let clamped = target
-                        .max(0)
-                        .min(total_lines.saturating_sub(1) as i64) as i32;
+                    let clamped = target.max(0).min(total_lines.saturating_sub(1) as i64) as i32;
                     scroll_offset = clamped as usize;
 
                     // Request scroll data from daemon
@@ -804,7 +812,11 @@ async fn enter_scroll_mode<R, W>(
 
                     // Read scroll response
                     match read_message::<_, Response>(reader).await {
-                        Ok(Response::ScrollModeData { data, offset, total_lines: tl }) => {
+                        Ok(Response::ScrollModeData {
+                            data,
+                            offset,
+                            total_lines: tl,
+                        }) => {
                             scroll_offset = offset;
                             total_lines = tl;
                             write_to_stdout(stdout_handle, b"\x1B[2J\x1B[H").await;
@@ -835,7 +847,8 @@ async fn write_to_stdout(stdout_handle: HANDLE, data: &[u8]) {
         unsafe {
             let _ = WriteFile(handle, Some(&data), Some(&mut written), None);
         }
-    }).await;
+    })
+    .await;
 }
 
 /// Write scroll position indicator to the top of the screen.
@@ -884,8 +897,7 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
     unsafe {
         let stdin_handle = GetStdHandle(STD_INPUT_HANDLE)?;
         let mut original_mode = CONSOLE_MODE::default();
-        GetConsoleMode(stdin_handle, &mut original_mode)
-            .context("Failed to get console mode")?;
+        GetConsoleMode(stdin_handle, &mut original_mode).context("Failed to get console mode")?;
 
         // Raw mode: disable line buffering, echo, and Ctrl+C processing.
         // Enable VT input for proper escape sequence passthrough (arrow keys etc).
@@ -894,8 +906,7 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
             & !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT))
             | ENABLE_VIRTUAL_TERMINAL_INPUT
             | ENABLE_WINDOW_INPUT;
-        SetConsoleMode(stdin_handle, raw_mode)
-            .context("Failed to set raw console mode")?;
+        SetConsoleMode(stdin_handle, raw_mode).context("Failed to set raw console mode")?;
 
         Ok(ConsoleRawModeGuard {
             stdin_handle,
@@ -908,7 +919,8 @@ fn enter_raw_mode() -> Result<ConsoleRawModeGuard> {
 fn get_terminal_size() -> (u16, u16) {
     unsafe {
         let handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap_or(HANDLE::default());
-        let mut info = std::mem::zeroed::<windows::Win32::System::Console::CONSOLE_SCREEN_BUFFER_INFO>();
+        let mut info =
+            std::mem::zeroed::<windows::Win32::System::Console::CONSOLE_SCREEN_BUFFER_INFO>();
         if windows::Win32::System::Console::GetConsoleScreenBufferInfo(handle, &mut info).is_ok() {
             let cols = (info.srWindow.Right - info.srWindow.Left + 1) as u16;
             let rows = (info.srWindow.Bottom - info.srWindow.Top + 1) as u16;
@@ -921,7 +933,10 @@ fn get_terminal_size() -> (u16, u16) {
 
 /// Draw status bar on the last line of the terminal.
 fn draw_status_bar(stdout_handle: HANDLE, session_id: &str, pane_count: u32, cols: u16, rows: u16) {
-    let status_text = format!(" [wmux] session:{} | panes:{} | Ctrl+B d:detach ", session_id, pane_count);
+    let status_text = format!(
+        " [wmux] session:{} | panes:{} | Ctrl+B d:detach ",
+        session_id, pane_count
+    );
     let padding = (cols as usize).saturating_sub(status_text.len());
     let bar = format!(
         "\x1b7\x1b[{};1H\x1b[42;30m{}{}\x1b[0m\x1b8",

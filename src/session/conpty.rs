@@ -9,9 +9,9 @@ use windows::Win32::System::Console::{ClosePseudoConsole, CreatePseudoConsole, C
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
     CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
-    TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject,
-    CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST,
-    PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, STARTUPINFOEXW, STARTUPINFOW,
+    TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject, CREATE_UNICODE_ENVIRONMENT,
+    EXTENDED_STARTUPINFO_PRESENT, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
+    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, STARTUPINFOEXW, STARTUPINFOW,
 };
 
 /// A ConPTY session wrapping a pseudo console and its child shell process.
@@ -41,7 +41,6 @@ pub struct ConPtySession {
 // HANDLE is Send-safe (it's just an isize wrapper for a kernel object).
 // ConPtySession is only accessed under a Mutex, so Sync is not needed.
 unsafe impl Send for ConPtySession {}
-
 
 impl ConPtySession {
     /// Spawn a new shell process inside a ConPTY pseudo console.
@@ -81,8 +80,7 @@ impl ConPtySession {
             );
 
             let mut attr_list_buf = vec![0u8; attr_list_size];
-            let attr_list =
-                LPPROC_THREAD_ATTRIBUTE_LIST(attr_list_buf.as_mut_ptr() as *mut _);
+            let attr_list = LPPROC_THREAD_ATTRIBUTE_LIST(attr_list_buf.as_mut_ptr() as *mut _);
 
             InitializeProcThreadAttributeList(attr_list, 1, 0, &mut attr_list_size)
                 .context("Failed to initialize proc thread attribute list")?;
@@ -115,7 +113,8 @@ impl ConPtySession {
                 None => "cmd.exe".to_string(),
             };
 
-            let mut cmd_line: Vec<u16> = shell_cmd.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut cmd_line: Vec<u16> =
+                shell_cmd.encode_utf16().chain(std::iter::once(0)).collect();
 
             // 5. Create the child process
             let mut proc_info = PROCESS_INFORMATION::default();
@@ -213,8 +212,7 @@ impl ConPtySession {
         use windows::Win32::System::Console::ResizePseudoConsole;
         let size = COORD { X: cols, Y: rows };
         unsafe {
-            ResizePseudoConsole(self.hpc, size)
-                .context("Failed to resize pseudo console")?;
+            ResizePseudoConsole(self.hpc, size).context("Failed to resize pseudo console")?;
         }
         self.cols = cols;
         self.rows = rows;
