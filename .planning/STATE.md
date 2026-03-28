@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 02-04-PLAN.md
-last_updated: "2026-03-28T16:45:32Z"
-last_activity: 2026-03-28 — Completed 02-04 Pane Navigation and Keybindings
+stopped_at: Completed 02-05-PLAN.md
+last_updated: "2026-03-28T16:47:00Z"
+last_activity: 2026-03-28 — Completed 02-05 Scrollback Buffer and Scroll Mode
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 8
-  percent: 89
+  completed_plans: 9
+  percent: 100
 ---
 
 # Project State
@@ -26,18 +26,18 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 2 of 3 (Session and Pane Core)
-Plan: 4 of 5 in current phase -- COMPLETE
+Plan: 5 of 5 in current phase -- COMPLETE
 Status: Executing
-Last activity: 2026-03-28 — Completed 02-04 Pane Navigation and Keybindings
+Last activity: 2026-03-28 — Completed 02-05 Scrollback Buffer and Scroll Mode
 
-Progress: [████████--] 80% (Phase 2)
+Progress: [██████████] 100% (Phase 2)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 7
+- Total plans completed: 9
 - Average duration: 7min
-- Total execution time: 47min
+- Total execution time: 63min
 
 **By Phase:**
 
@@ -57,6 +57,7 @@ Progress: [████████--] 80% (Phase 2)
 | Phase 02 P02 | 8min | 2 tasks | 9 files |
 | Phase 02 P03 | 9min | 2 tasks | 3 files |
 | Phase 02 P04 | 6min | 2 tasks | 4 files |
+| Phase 02 P05 | 8min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,10 @@ Recent decisions affecting current work:
 - [Phase 02-04]: NavigatePane uses index-based directional wrapping (daemon has no WT spatial layout knowledge)
 - [Phase 02-04]: wt_move_focus/wt_resize_pane graceful fallback on older WT versions lacking experimental commands
 - [Phase 02-04]: Inline attach command dispatch for NavigatePane/SplitPane/KillPane/ResizePane during streaming
+- [Phase 02-05]: Ring buffer Vec<Vec<u8>> with head/count for O(1) scrollback push and indexed access
+- [Phase 02-05]: push_bytes() partial line buffering for correct newline-based line splitting
+- [Phase 02-05]: build_scroll_response() sync helper pattern to avoid !Send HANDLE across await points
+- [Phase 02-05]: Scroll mode: 50-line pages with ANSI clear-screen rendering, vim keys (j/k/g/G) in addition to arrows
 
 ### Pending Todos
 
@@ -107,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-28T16:45:32Z
-Stopped at: Completed 02-04-PLAN.md
-Resume file: .planning/phases/02-session-and-pane-core/02-04-SUMMARY.md
+Last session: 2026-03-28T16:47:00Z
+Stopped at: Completed 02-05-PLAN.md
+Resume file: .planning/phases/02-session-and-pane-core/02-05-SUMMARY.md

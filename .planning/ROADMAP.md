@@ -13,7 +13,7 @@ wmux is built in three phases. Phase 1 establishes the daemon process and IPC fo
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Daemon Foundation** - Background daemon process with Named Pipe IPC and ConPTY scaffolding (completed 2026-03-28)
-- [ ] **Phase 2: Session and Pane Core** - Full session lifecycle and pane management via CLI and Windows Terminal
+- [x] **Phase 2: Session and Pane Core** - Full session lifecycle and pane management via CLI and Windows Terminal (completed 2026-03-28)
 - [ ] **Phase 3: Configuration and Polish** - TOML config, CLI help/errors, and distribution readiness
 
 ## Phase Details
@@ -46,7 +46,7 @@ Plans:
   3. User can split a pane horizontally with `wmux split -h` and vertically with `wmux split -v`, producing independent shell processes in each pane via ConPTY
   4. User can navigate between panes and resize them via keybindings, and close a pane with `wmux kill-pane`
   5. User can scroll back through pane output history
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 - [ ] 02-01-PLAN.md — Protocol extension, Pane model, WT detection, CLI updates
@@ -73,5 +73,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Daemon Foundation | 4/4 | Complete   | 2026-03-28 |
-| 2. Session and Pane Core | 4/5 | In Progress|  |
+| 2. Session and Pane Core | 5/5 | Complete   | 2026-03-28 |
 | 3. Configuration and Polish | 0/TBD | Not started | - |

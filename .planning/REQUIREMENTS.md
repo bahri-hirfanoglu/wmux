@@ -31,7 +31,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **PANE-04**: User can resize panes with keybindings
 - [x] **PANE-05**: Each pane runs an independent shell process via ConPTY
 - [x] **PANE-06**: User can close a pane with `wmux kill-pane`
-- [ ] **PANE-07**: User can scroll back through pane output history
+- [x] **PANE-07**: User can scroll back through pane output history
 
 ### Configuration
 
@@ -115,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PANE-04 | Phase 2 | Complete |
 | PANE-05 | Phase 2 | Complete |
 | PANE-06 | Phase 2 | Complete |
-| PANE-07 | Phase 2 | Pending |
+| PANE-07 | Phase 2 | Complete |
 | INTG-01 | Phase 2 | Complete |
 | INTG-02 | Phase 2 | Complete |
 | CONF-01 | Phase 3 | Pending |
