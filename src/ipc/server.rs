@@ -85,11 +85,11 @@ impl ControlServer {
 /// For most requests: reads a Request, processes it, sends a Response, then disconnects.
 /// For AttachSession: enters a long-lived bidirectional streaming loop.
 async fn handle_connection(
-    mut pipe: tokio::net::windows::named_pipe::NamedPipeServer,
+    pipe: tokio::net::windows::named_pipe::NamedPipeServer,
     shutdown_tx: watch::Sender<bool>,
     session_manager: Arc<Mutex<SessionManager>>,
 ) -> Result<()> {
-    let (mut reader, mut writer) = tokio::io::split(&mut pipe);
+    let (mut reader, mut writer) = tokio::io::split(pipe);
 
     let request: Request = read_message(&mut reader)
         .await
@@ -229,13 +229,13 @@ async fn handle_connection(
 /// We lock briefly to extract raw HANDLE values (which are Copy), then
 /// use the handles directly in the streaming loop.
 async fn handle_attach<R, W>(
-    mut reader: R,
+    reader: R,
     mut writer: W,
     session_id: String,
     session_manager: Arc<Mutex<SessionManager>>,
 ) -> Result<()>
 where
-    R: tokio::io::AsyncRead + Unpin,
+    R: tokio::io::AsyncRead + Unpin + Send + 'static,
     W: tokio::io::AsyncWrite + Unpin,
 {
     // 1. Validate session and get pipe handles as raw isize (brief lock).
@@ -287,8 +287,6 @@ where
     info!("Attach started for session {}", session_id);
 
     // 3. Subscribe to the session's broadcast channel for ConPTY output.
-    //    The drain thread (started when session was created) continuously
-    //    reads ConPTY and broadcasts. We just subscribe here.
     let mut output_rx = {
         let mgr = session_manager.lock().await;
         match mgr.get_session(&session_id) {
@@ -305,14 +303,12 @@ where
     };
 
     // 4. Send buffered scrollback content so client sees the current screen state.
-    //    Without this, the client only sees output produced AFTER subscribing.
     {
         let mgr = session_manager.lock().await;
         if let Some(pane) = mgr.get_active_pane(&session_id) {
             let sb = pane.scrollback();
             let total = sb.line_count();
             if total > 0 {
-                // Send last ~50 lines (roughly one screen)
                 let start = total.saturating_sub(50);
                 let lines = sb.get_lines(start, total - start);
                 let mut replay_data = Vec::new();
@@ -328,7 +324,28 @@ where
         }
     }
 
-    // 5. Enter bidirectional streaming loop
+    // 5. Spawn a dedicated client reader task.
+    //    This is CRITICAL: read_message is NOT cancel-safe in tokio::select!.
+    //    If the output branch wins, a partial read_message would be dropped,
+    //    corrupting the Named Pipe protocol stream.
+    //    By using a dedicated task + channel, reads are never cancelled.
+    let (client_tx, mut client_rx) = tokio::sync::mpsc::channel::<Request>(32);
+    let client_reader = tokio::spawn(async move {
+        let mut reader = reader;
+        loop {
+            match read_message::<_, Request>(&mut reader).await {
+                Ok(req) => {
+                    if client_tx.send(req).await.is_err() {
+                        break; // receiver dropped — attach ending
+                    }
+                }
+                Err(_) => break, // client disconnected
+            }
+        }
+    });
+
+    // 6. Enter bidirectional streaming loop.
+    //    Both branches now read from channels — no cancel-safety issues.
     loop {
         tokio::select! {
             // ConPTY output from drain thread via broadcast channel
@@ -343,7 +360,6 @@ where
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
                         warn!("Client lagged behind by {} messages", n);
-                        // Continue — we'll catch up
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         info!("ConPTY output channel closed for session {}", session_id);
@@ -352,11 +368,11 @@ where
                 }
             }
 
-            // Client sent a message — process it
-            input_result = read_message::<_, Request>(&mut reader) => {
-                match input_result {
-                    Ok(Request::SessionInput { data }) => {
-                        // Write input to ConPTY via spawn_blocking (anonymous pipes are sync)
+            // Client sent a message via dedicated reader task
+            client_result = client_rx.recv() => {
+                match client_result {
+                    Some(Request::SessionInput { data }) => {
+                        // Write input to ConPTY
                         let in_raw = pipe_in_raw;
                         let write_result = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
                             let handle = HANDLE(in_raw as *mut _);
@@ -380,12 +396,11 @@ where
                             }
                         }
                     }
-                    Ok(Request::DetachSession { .. }) => {
+                    Some(Request::DetachSession { .. }) => {
                         info!("Client requested detach from session {}", session_id);
                         break;
                     }
-                    Ok(Request::NavigatePane { session_id: sid, direction }) => {
-                        // Update daemon's active pane tracking (best-effort directional mapping)
+                    Some(Request::NavigatePane { session_id: sid, direction }) => {
                         let mut mgr = session_manager.lock().await;
                         if let Some(session) = mgr.get_session_mut(&sid) {
                             let current_idx = session.panes.iter().position(|p| p.id() == session.active_pane).unwrap_or(0);
@@ -405,47 +420,34 @@ where
                                 for pane in &mut session.panes {
                                     pane.set_active(pane.id() == new_pane_id);
                                 }
-                                info!("Navigated to pane {} in session {}", new_pane_id, sid);
                             }
                         }
                     }
-                    Ok(Request::SplitPane { session_id: sid, direction: _ }) => {
-                        // Create a new pane on the daemon side
+                    Some(Request::SplitPane { session_id: sid, direction: _ }) => {
                         let mut mgr = session_manager.lock().await;
                         match mgr.add_pane(&sid, 120, 30, None) {
                             Ok((pane_id, _pid)) => {
-                                // Send PaneInfo back so client can invoke wt.exe split-pane
                                 let resp = Response::PaneInfo {
                                     session_id: sid.clone(),
                                     pane_id,
                                     pid: _pid,
                                 };
                                 let _ = write_message(&mut writer, &resp).await;
-                                info!("Split pane {} created in session {} (via prefix key)", pane_id, sid);
                             }
                             Err(e) => {
-                                warn!("Failed to split pane in session {}: {}", sid, e);
+                                warn!("Failed to split pane: {}", e);
                             }
                         }
                     }
-                    Ok(Request::KillPane { session_id: sid, pane_id }) => {
+                    Some(Request::KillPane { session_id: sid, pane_id }) => {
                         let mut mgr = session_manager.lock().await;
-                        match mgr.kill_pane(&sid, pane_id) {
-                            Ok(()) => {
-                                info!("Pane {} killed in session {} (via prefix key)", pane_id, sid);
-                            }
-                            Err(e) => {
-                                warn!("Failed to kill pane {} in session {}: {}", pane_id, sid, e);
-                            }
-                        }
+                        let _ = mgr.kill_pane(&sid, pane_id);
                     }
-                    Ok(Request::ResizePane { session_id: sid, pane_id, cols, rows }) => {
+                    Some(Request::ResizePane { session_id: sid, pane_id, cols, rows }) => {
                         let mut mgr = session_manager.lock().await;
-                        if let Err(e) = mgr.resize_pane(&sid, pane_id, cols, rows) {
-                            warn!("Failed to resize pane {} in session {}: {}", pane_id, sid, e);
-                        }
+                        let _ = mgr.resize_pane(&sid, pane_id, cols, rows);
                     }
-                    Ok(Request::EnterScrollMode { session_id: sid, pane_id }) => {
+                    Some(Request::EnterScrollMode { session_id: sid, pane_id }) => {
                         let resp = {
                             let mgr = session_manager.lock().await;
                             build_scroll_response(&mgr, &sid, pane_id, None)
@@ -454,7 +456,7 @@ where
                             let _ = write_message(&mut writer, &r).await;
                         }
                     }
-                    Ok(Request::ScrollBack { session_id: sid, pane_id, lines }) => {
+                    Some(Request::ScrollBack { session_id: sid, pane_id, lines }) => {
                         let resp = {
                             let mgr = session_manager.lock().await;
                             build_scroll_response(&mgr, &sid, pane_id, Some(lines))
@@ -463,16 +465,11 @@ where
                             let _ = write_message(&mut writer, &r).await;
                         }
                     }
-                    Ok(Request::ExitScrollMode { .. }) => {
-                        // Client exited scroll mode — resume normal streaming
-                        info!("Client exited scroll mode for session {}", session_id);
-                    }
-                    Ok(other) => {
-                        warn!("Unexpected request during attach: {:?}", other);
-                    }
-                    Err(e) => {
-                        // Client disconnected (pipe broken/closed)
-                        info!("Client disconnected from session {}: {}", session_id, e);
+                    Some(Request::ExitScrollMode { .. }) => {}
+                    Some(_) => {}
+                    None => {
+                        // Client reader task ended — client disconnected
+                        info!("Client disconnected from session {}", session_id);
                         break;
                     }
                 }
@@ -480,8 +477,10 @@ where
         }
     }
 
-    // 5. Clean up: drop broadcast subscription, decrement attached clients
+    // 7. Clean up
     drop(output_rx);
+    drop(client_rx);
+    client_reader.abort();
 
     // Decrement attached clients, send Ok response for detach
     {
