@@ -5,15 +5,17 @@ use anyhow::{bail, Context, Result};
 use tracing::info;
 
 use super::conpty::ConPtySession;
+use super::pane::Pane;
 use crate::daemon::recovery::{self, PersistedSession, PersistedState};
 use crate::ipc::protocol::SessionInfo;
 
-/// Metadata and ConPTY handle for a single session.
+/// Metadata and panes for a single session.
 pub struct Session {
     pub id: String,
     pub name: Option<String>,
     pub created_at: SystemTime,
-    pub conpty: ConPtySession,
+    pub panes: Vec<Pane>,
+    pub active_pane: u32,
 }
 
 /// Manages all active terminal sessions.
@@ -30,13 +32,13 @@ impl SessionManager {
         }
     }
 
-    /// Create a new session, spawning a shell via ConPTY.
+    /// Create a new session, spawning a default pane with a shell via ConPTY.
     pub fn create_session(&mut self, name: Option<String>) -> Result<SessionInfo> {
         let id = self.next_id.to_string();
         self.next_id += 1;
 
-        let conpty = ConPtySession::new(120, 30, None)
-            .with_context(|| format!("Failed to create ConPTY session {}", id))?;
+        let pane = Pane::new(0, 120, 30, None)
+            .with_context(|| format!("Failed to create default pane for session {}", id))?;
 
         let created_at = SystemTime::now();
 
@@ -44,13 +46,14 @@ impl SessionManager {
             "Session created: id={}, name={:?}, pid={}",
             id,
             name,
-            conpty.process_id()
+            pane.process_id()
         );
 
         let session_info = SessionInfo {
             id: id.clone(),
             name: name.clone(),
             created_at: format_time(created_at),
+            pane_count: 1,
         };
 
         self.sessions.insert(
@@ -59,7 +62,8 @@ impl SessionManager {
                 id,
                 name,
                 created_at,
-                conpty,
+                panes: vec![pane],
+                active_pane: 0,
             },
         );
 
@@ -77,15 +81,20 @@ impl SessionManager {
                 id: s.id.clone(),
                 name: s.name.clone(),
                 created_at: format_time(s.created_at),
+                pane_count: s.panes.len() as u32,
             })
             .collect()
     }
 
-    /// Kill a session by ID, terminating its shell process.
+    /// Kill a session by ID, terminating all its panes.
     pub fn kill_session(&mut self, id: &str) -> Result<()> {
         match self.sessions.remove(id) {
             Some(mut session) => {
-                session.conpty.kill()?;
+                for pane in &mut session.panes {
+                    if let Err(e) = pane.kill() {
+                        tracing::error!("Failed to kill pane {} in session {}: {}", pane.id(), id, e);
+                    }
+                }
                 info!("Session killed: id={}", id);
 
                 // Persist state after structural change (best-effort)
@@ -97,6 +106,132 @@ impl SessionManager {
                 bail!("Session '{}' not found", id);
             }
         }
+    }
+
+    /// Add a new pane to an existing session. Returns (pane_id, pid).
+    pub fn add_pane(
+        &mut self,
+        session_id: &str,
+        cols: i16,
+        rows: i16,
+        shell: Option<&str>,
+    ) -> Result<(u32, u32)> {
+        let session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
+
+        let next_pane_id = session.panes.iter().map(|p| p.id()).max().unwrap_or(0) + 1;
+        let pane = Pane::new(next_pane_id, cols, rows, shell)
+            .with_context(|| format!("Failed to create pane {} in session {}", next_pane_id, session_id))?;
+
+        let pid = pane.process_id();
+        info!("Pane added: session={}, pane_id={}, pid={}", session_id, next_pane_id, pid);
+
+        session.panes.push(pane);
+
+        self.persist_state();
+
+        Ok((next_pane_id, pid))
+    }
+
+    /// Kill a specific pane. If it's the last pane, kills the entire session.
+    pub fn kill_pane(&mut self, session_id: &str, pane_id: u32) -> Result<()> {
+        // Check if session exists and if this is the last pane
+        let is_last_pane = {
+            let session = self
+                .sessions
+                .get(session_id)
+                .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
+            let _pane_idx = session
+                .panes
+                .iter()
+                .position(|p| p.id() == pane_id)
+                .ok_or_else(|| anyhow::anyhow!("Pane {} not found in session '{}'", pane_id, session_id))?;
+            session.panes.len() == 1
+        };
+
+        // If this is the last pane, kill the entire session
+        if is_last_pane {
+            return self.kill_session(session_id);
+        }
+
+        let session = self.sessions.get_mut(session_id).unwrap();
+        let pane_idx = session.panes.iter().position(|p| p.id() == pane_id).unwrap();
+        let mut pane = session.panes.remove(pane_idx);
+        pane.kill()?;
+
+        // If the active pane was killed, switch to the first available pane
+        if session.active_pane == pane_id {
+            session.active_pane = session.panes[0].id();
+            session.panes[0].set_active(true);
+        }
+
+        info!("Pane killed: session={}, pane_id={}", session_id, pane_id);
+        self.persist_state();
+
+        Ok(())
+    }
+
+    /// Get a reference to the active pane in a session.
+    pub fn get_active_pane(&self, session_id: &str) -> Option<&Pane> {
+        self.sessions.get(session_id).and_then(|s| {
+            s.panes.iter().find(|p| p.id() == s.active_pane)
+        })
+    }
+
+    /// Get a mutable reference to the active pane in a session.
+    pub fn get_active_pane_mut(&mut self, session_id: &str) -> Option<&mut Pane> {
+        self.sessions.get_mut(session_id).and_then(|s| {
+            let active = s.active_pane;
+            s.panes.iter_mut().find(|p| p.id() == active)
+        })
+    }
+
+    /// Set which pane is focused in a session.
+    pub fn set_active_pane(&mut self, session_id: &str, pane_id: u32) -> Result<()> {
+        let session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
+
+        let pane_exists = session.panes.iter().any(|p| p.id() == pane_id);
+        if !pane_exists {
+            bail!("Pane {} not found in session '{}'", pane_id, session_id);
+        }
+
+        // Deactivate old, activate new
+        for pane in &mut session.panes {
+            pane.set_active(pane.id() == pane_id);
+        }
+        session.active_pane = pane_id;
+
+        Ok(())
+    }
+
+    /// Resize a specific pane's ConPTY pseudo console.
+    pub fn resize_pane(
+        &mut self,
+        session_id: &str,
+        pane_id: u32,
+        cols: i16,
+        rows: i16,
+    ) -> Result<()> {
+        let session = self
+            .sessions
+            .get_mut(session_id)
+            .ok_or_else(|| anyhow::anyhow!("Session '{}' not found", session_id))?;
+
+        let pane = session
+            .panes
+            .iter_mut()
+            .find(|p| p.id() == pane_id)
+            .ok_or_else(|| anyhow::anyhow!("Pane {} not found in session '{}'", pane_id, session_id))?;
+
+        pane.conpty_mut().resize(cols, rows)?;
+        info!("Pane resized: session={}, pane_id={}, cols={}, rows={}", session_id, pane_id, cols, rows);
+
+        Ok(())
     }
 
     /// Return the number of active sessions.
@@ -111,6 +246,7 @@ impl SessionManager {
     }
 
     /// Restore a session with a specific ID (used during crash recovery).
+    /// Creates a session with a single default pane from the given ConPTY.
     pub fn restore_session(&mut self, id: String, name: Option<String>, conpty: ConPtySession) {
         let created_at = SystemTime::now();
         info!(
@@ -119,13 +255,18 @@ impl SessionManager {
             name,
             conpty.process_id()
         );
+
+        // Wrap the restored ConPTY in a Pane
+        let pane = Pane::from_conpty(0, conpty);
+
         self.sessions.insert(
             id.clone(),
             Session {
                 id,
                 name,
                 created_at,
-                conpty,
+                panes: vec![pane],
+                active_pane: 0,
             },
         );
     }
@@ -140,14 +281,18 @@ impl SessionManager {
         let sessions: Vec<PersistedSession> = self
             .sessions
             .values()
-            .map(|s| PersistedSession {
-                id: s.id.clone(),
-                name: s.name.clone(),
-                pid: s.conpty.process_id(),
-                created_at: format_time(s.created_at),
-                shell: s.conpty.shell().to_string(),
-                cols: s.conpty.cols(),
-                rows: s.conpty.rows(),
+            .map(|s| {
+                // Persist based on the first (default) pane for backward compat
+                let pane = &s.panes[0];
+                PersistedSession {
+                    id: s.id.clone(),
+                    name: s.name.clone(),
+                    pid: pane.process_id(),
+                    created_at: format_time(s.created_at),
+                    shell: pane.conpty().shell().to_string(),
+                    cols: pane.conpty().cols(),
+                    rows: pane.conpty().rows(),
+                }
             })
             .collect();
 
@@ -159,7 +304,7 @@ impl SessionManager {
         }
     }
 
-    /// Persist state to disk (best-effort — logs errors but does not fail).
+    /// Persist state to disk (best-effort -- logs errors but does not fail).
     fn persist_state(&self) {
         let state = self.to_persisted_state();
         if let Err(e) = recovery::save_state(&state) {

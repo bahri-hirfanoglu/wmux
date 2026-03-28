@@ -139,6 +139,41 @@ async fn handle_connection(
                 },
             }
         }
+        Request::SplitPane { session_id, direction: _direction } => {
+            let mut mgr = session_manager.lock().await;
+            match mgr.add_pane(&session_id, 120, 30, None) {
+                Ok(pane_info) => Response::PaneInfo {
+                    session_id,
+                    pane_id: pane_info.0,
+                    pid: pane_info.1,
+                },
+                Err(e) => Response::Error {
+                    message: format!("Failed to split pane: {}", e),
+                },
+            }
+        }
+        Request::KillPane { session_id, pane_id } => {
+            let mut mgr = session_manager.lock().await;
+            match mgr.kill_pane(&session_id, pane_id) {
+                Ok(()) => Response::Ok {
+                    message: format!("Pane {} killed in session {}", pane_id, session_id),
+                },
+                Err(e) => Response::Error {
+                    message: format!("{}", e),
+                },
+            }
+        }
+        Request::ResizePane { session_id, pane_id, cols, rows } => {
+            let mut mgr = session_manager.lock().await;
+            match mgr.resize_pane(&session_id, pane_id, cols, rows) {
+                Ok(()) => Response::Ok {
+                    message: format!("Pane {} resized to {}x{}", pane_id, cols, rows),
+                },
+                Err(e) => Response::Error {
+                    message: format!("{}", e),
+                },
+            }
+        }
         _ => Response::Error {
             message: "Command not yet implemented".to_string(),
         },

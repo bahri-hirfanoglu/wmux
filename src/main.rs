@@ -55,12 +55,13 @@ async fn main() -> anyhow::Result<()> {
                     if sessions.is_empty() {
                         println!("No active sessions");
                     } else {
-                        println!("{:<6} {:<20} {}", "ID", "NAME", "CREATED");
+                        println!("{:<6} {:<20} {:<8} {}", "ID", "NAME", "PANES", "CREATED");
                         for s in &sessions {
                             println!(
-                                "{:<6} {:<20} {}",
+                                "{:<6} {:<20} {:<8} {}",
                                 s.id,
                                 s.name.as_deref().unwrap_or("-"),
+                                s.pane_count,
                                 s.created_at
                             );
                         }

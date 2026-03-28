@@ -2,18 +2,40 @@ use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+/// Direction for splitting a pane.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum SplitDirection {
+    Horizontal,
+    Vertical,
+}
+
+/// Direction for navigating between panes.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub enum NavDirection {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum Request {
     Ping,
     Status,
     KillServer,
-    // Placeholders for Phase 2
     NewSession { name: Option<String> },
     ListSessions,
-    AttachSession { id: String },
-    DetachSession { id: String },
+    AttachSession { session_id: String },
+    DetachSession { session_id: String },
     KillSession { id: String },
+    SplitPane { session_id: String, direction: SplitDirection },
+    KillPane { session_id: String, pane_id: u32 },
+    NavigatePane { session_id: String, direction: NavDirection },
+    ResizePane { session_id: String, pane_id: u32, cols: i16, rows: i16 },
+    ScrollBack { session_id: String, pane_id: u32, lines: i32 },
+    EnterScrollMode { session_id: String, pane_id: u32 },
+    ExitScrollMode { session_id: String, pane_id: u32 },
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -34,13 +56,26 @@ pub enum Response {
     SessionList {
         sessions: Vec<SessionInfo>,
     },
+    PaneInfo {
+        session_id: String,
+        pane_id: u32,
+        pid: u32,
+    },
+    SessionOutput {
+        data: Vec<u8>,
+    },
+    AttachStarted {
+        session_id: String,
+        pane_count: u32,
+    },
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct SessionInfo {
     pub id: String,
     pub name: Option<String>,
     pub created_at: String,
+    pub pane_count: u32,
 }
 
 /// Write a length-prefixed JSON message to an async writer.

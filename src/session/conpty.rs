@@ -178,6 +178,19 @@ impl ConPtySession {
         &self.shell
     }
 
+    /// Resize the pseudo console to new dimensions.
+    pub fn resize(&mut self, cols: i16, rows: i16) -> Result<()> {
+        use windows::Win32::System::Console::ResizePseudoConsole;
+        let size = COORD { X: cols, Y: rows };
+        unsafe {
+            ResizePseudoConsole(self.hpc, size)
+                .context("Failed to resize pseudo console")?;
+        }
+        self.cols = cols;
+        self.rows = rows;
+        Ok(())
+    }
+
     /// Check if the child process is still running.
     pub fn is_alive(&self) -> bool {
         if self.closed {

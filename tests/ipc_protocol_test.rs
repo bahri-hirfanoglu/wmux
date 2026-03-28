@@ -56,11 +56,13 @@ async fn response_session_list_round_trip() {
                 id: "abc123".to_string(),
                 name: Some("main".to_string()),
                 created_at: "2026-03-28T12:00:00Z".to_string(),
+                pane_count: 1,
             },
             SessionInfo {
                 id: "def456".to_string(),
                 name: None,
                 created_at: "2026-03-28T13:00:00Z".to_string(),
+                pane_count: 2,
             },
         ],
     };
@@ -76,11 +78,13 @@ async fn response_session_list_round_trip() {
                     id: "abc123".to_string(),
                     name: Some("main".to_string()),
                     created_at: "2026-03-28T12:00:00Z".to_string(),
+                    pane_count: 1,
                 },
                 SessionInfo {
                     id: "def456".to_string(),
                     name: None,
                     created_at: "2026-03-28T13:00:00Z".to_string(),
+                    pane_count: 2,
                 },
             ],
         }
