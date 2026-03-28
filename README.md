@@ -6,8 +6,8 @@
   <br>
   <strong>A native Windows terminal multiplexer — tmux for Windows.</strong>
   <br><br>
-  <a href="https://github.com/bahri-hirfanoglu/wmux/actions"><img src="https://github.com/bahri-hirfanoglu/wmux/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://crates.io/crates/wmux"><img src="https://img.shields.io/crates/v/wmux.svg" alt="crates.io"></a>
+  <a href="https://crates.io/crates/wmux"><img src="https://img.shields.io/crates/d/wmux.svg" alt="Downloads"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg" alt="License"></a>
   <a href="https://github.com/bahri-hirfanoglu/wmux/releases"><img src="https://img.shields.io/github/v/release/bahri-hirfanoglu/wmux?include_prereleases" alt="GitHub Release"></a>
 </p>
