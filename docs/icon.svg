@@ -1,41 +1,102 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
+    <!-- Glow filter for text -->
+    <filter id="glow-strong">
+      <feGaussianBlur stdDeviation="6" result="blur1"/>
+      <feGaussianBlur stdDeviation="12" result="blur2"/>
+      <feMerge>
+        <feMergeNode in="blur2"/>
+        <feMergeNode in="blur1"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-soft">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
-    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
-      <stop offset="0%" stop-color="#141a22"/>
-      <stop offset="100%" stop-color="#0d1117"/>
+    <!-- Background gradient -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0.2" y2="1">
+      <stop offset="0%" stop-color="#151d28"/>
+      <stop offset="100%" stop-color="#0a0e14"/>
+    </linearGradient>
+    <!-- Border gradient -->
+    <linearGradient id="border-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#00ff41" stop-opacity="0.4"/>
+      <stop offset="50%" stop-color="#30363d"/>
+      <stop offset="100%" stop-color="#00ff41" stop-opacity="0.2"/>
+    </linearGradient>
+    <!-- Underline gradient -->
+    <linearGradient id="line-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#00ff41" stop-opacity="0"/>
+      <stop offset="20%" stop-color="#00ff41" stop-opacity="0.8"/>
+      <stop offset="80%" stop-color="#00ff41" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#00ff41" stop-opacity="0"/>
     </linearGradient>
   </defs>
 
-  <!-- Background rounded square -->
-  <rect width="512" height="512" rx="80" fill="url(#bg)"/>
+  <!-- Background -->
+  <rect width="512" height="512" rx="90" fill="url(#bg)"/>
 
-  <!-- Subtle border -->
-  <rect x="2" y="2" width="508" height="508" rx="78" fill="none" stroke="#30363d" stroke-width="2"/>
+  <!-- Gradient border -->
+  <rect x="3" y="3" width="506" height="506" rx="87" fill="none" stroke="url(#border-grad)" stroke-width="2.5"/>
 
-  <!-- Green glow behind text -->
-  <ellipse cx="256" cy="230" rx="200" ry="120" fill="rgba(0,255,65,0.06)"/>
+  <!-- Grid pattern -->
+  <g opacity="0.08">
+    <line x1="128" y1="0" x2="128" y2="512" stroke="#00ff41" stroke-width="0.5"/>
+    <line x1="256" y1="0" x2="256" y2="512" stroke="#00ff41" stroke-width="0.5"/>
+    <line x1="384" y1="0" x2="384" y2="512" stroke="#00ff41" stroke-width="0.5"/>
+    <line x1="0" y1="128" x2="512" y2="128" stroke="#00ff41" stroke-width="0.5"/>
+    <line x1="0" y1="256" x2="512" y2="256" stroke="#00ff41" stroke-width="0.5"/>
+    <line x1="0" y1="384" x2="512" y2="384" stroke="#00ff41" stroke-width="0.5"/>
+  </g>
 
-  <!-- Terminal bracket left -->
-  <text x="60" y="290" font-family="Consolas,'Courier New',monospace" font-size="160" font-weight="900" fill="#1a3a1f" filter="url(#glow)">></text>
+  <!-- Large green glow behind logo -->
+  <ellipse cx="256" cy="220" rx="180" ry="130" fill="#00ff41" opacity="0.04"/>
+  <ellipse cx="256" cy="220" rx="120" ry="80" fill="#00ff41" opacity="0.06"/>
 
-  <!-- wmux text -->
-  <text x="256" y="270" text-anchor="middle" font-family="Consolas,'Courier New',monospace" font-size="120" font-weight="900" fill="#00ff41" filter="url(#glow)">wmux</text>
+  <!-- Terminal prompt cursor > -->
+  <text x="52" y="272" font-family="Consolas,'Courier New',monospace" font-size="110" font-weight="900" fill="#00ff41" opacity="0.12" filter="url(#glow-soft)">></text>
 
-  <!-- Underline accent -->
-  <rect x="96" y="300" width="320" height="4" rx="2" fill="#00ff41" opacity="0.5"/>
+  <!-- Main logo text -->
+  <text x="256" y="258" text-anchor="middle" font-family="Consolas,'Courier New',monospace" font-size="115" font-weight="900" fill="#00ff41" filter="url(#glow-strong)" letter-spacing="4">wmux</text>
+
+  <!-- Accent underline -->
+  <rect x="80" y="285" width="352" height="3.5" rx="2" fill="url(#line-grad)"/>
 
   <!-- Tagline -->
-  <text x="256" y="365" text-anchor="middle" font-family="Segoe UI,system-ui,sans-serif" font-size="32" fill="#8b949e" font-weight="500">tmux for Windows</text>
+  <text x="256" y="340" text-anchor="middle" font-family="Segoe UI,system-ui,sans-serif" font-size="30" fill="#8b949e" font-weight="400" letter-spacing="2">tmux for Windows</text>
 
-  <!-- Bottom terminal dots -->
-  <circle cx="210" cy="420" r="10" fill="#f85149"/>
-  <circle cx="256" cy="420" r="10" fill="#d29922"/>
-  <circle cx="302" cy="420" r="10" fill="#3fb950"/>
+  <!-- Bottom section: terminal window mini -->
+  <g transform="translate(140, 380)">
+    <!-- Mini terminal frame -->
+    <rect width="232" height="72" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+    <!-- Title bar -->
+    <rect width="232" height="22" rx="8" fill="#1c2129"/>
+    <rect y="16" width="232" height="6" fill="#1c2129"/>
+    <circle cx="16" cy="11" r="4" fill="#f85149"/>
+    <circle cx="30" cy="11" r="4" fill="#d29922"/>
+    <circle cx="44" cy="11" r="4" fill="#3fb950"/>
+    <!-- Terminal content -->
+    <text x="12" y="42" font-family="Consolas,monospace" font-size="10" fill="#6e7681">C:\&gt; </text>
+    <text x="48" y="42" font-family="Consolas,monospace" font-size="10" fill="#00ff41">wmux attach</text>
+    <text x="12" y="56" font-family="Consolas,monospace" font-size="9" fill="#3fb950">[wmux] attached to session 1</text>
+    <!-- Status bar -->
+    <rect y="62" width="232" height="10" rx="0 0 8 8" fill="#238636"/>
+    <text x="8" y="70" font-family="Consolas,monospace" font-size="7" fill="#fff">session:1 | panes:1</text>
+  </g>
+
+  <!-- Rust badge -->
+  <g transform="translate(390, 395)">
+    <rect width="72" height="24" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="36" y="16" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="10" fill="#f74c00" font-weight="600">Rust</text>
+  </g>
+
+  <!-- Windows badge -->
+  <g transform="translate(390, 428)">
+    <rect width="72" height="24" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="36" y="16" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="10" fill="#58a6ff" font-weight="600">Windows</text>
+  </g>
 </svg>
