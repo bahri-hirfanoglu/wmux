@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#21262d" stroke-width="0.5"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)" opacity="0.5"/>
+
+  <!-- Logo ASCII art -->
+  <text x="600" y="130" text-anchor="middle" font-family="Consolas,monospace" font-size="48" font-weight="bold" fill="#00ff41" filter="url(#glow)">wmux</text>
+
+  <!-- Tagline -->
+  <text x="600" y="175" text-anchor="middle" font-family="Segoe UI,system-ui,sans-serif" font-size="24" fill="#8b949e">tmux for Windows</text>
+
+  <!-- Terminal window mockup -->
+  <rect x="200" y="210" width="800" height="320" rx="10" fill="#0a0e14" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Terminal title bar -->
+  <rect x="200" y="210" width="800" height="36" rx="10" fill="#161b22"/>
+  <rect x="200" y="236" width="800" height="10" fill="#161b22"/>
+  <circle cx="224" cy="228" r="6" fill="#f85149"/>
+  <circle cx="246" cy="228" r="6" fill="#d29922"/>
+  <circle cx="268" cy="228" r="6" fill="#3fb950"/>
+  <text x="600" y="232" text-anchor="middle" font-family="Segoe UI,sans-serif" font-size="13" fill="#8b949e">wmux [session:1] [panes:1]</text>
+
+  <!-- Terminal content -->
+  <text x="230" y="276" font-family="Consolas,monospace" font-size="15" fill="#8b949e">C:\Users\dev&gt;</text>
+  <text x="385" y="276" font-family="Consolas,monospace" font-size="15" fill="#00ff41">wmux new</text>
+
+  <text x="230" y="300" font-family="Consolas,monospace" font-size="15" fill="#58a6ff">Starting daemon...</text>
+  <text x="230" y="324" font-family="Consolas,monospace" font-size="15" fill="#58a6ff">Created session: 1</text>
+
+  <text x="230" y="360" font-family="Consolas,monospace" font-size="15" fill="#8b949e">C:\Users\dev&gt;</text>
+  <text x="385" y="360" font-family="Consolas,monospace" font-size="15" fill="#00ff41">wmux attach</text>
+
+  <text x="230" y="384" font-family="Consolas,monospace" font-size="15" fill="#3fb950">[wmux] attached to session 1 (Ctrl+B d to detach)</text>
+
+  <text x="230" y="420" font-family="Consolas,monospace" font-size="15" fill="#8b949e">C:\Users\dev&gt;</text>
+  <text x="385" y="420" font-family="Consolas,monospace" font-size="15" fill="#f0f6fc">npm run build</text>
+
+  <text x="230" y="444" font-family="Consolas,monospace" font-size="15" fill="#3fb950">Building... (close terminal, come back later!)</text>
+
+  <!-- Cursor blink -->
+  <rect x="230" y="464" width="10" height="18" fill="#00ff41" opacity="0.8"/>
+
+  <!-- Status bar -->
+  <rect x="200" y="494" width="800" height="36" rx="0" fill="#238636"/>
+  <rect x="200" y="520" width="800" height="10" rx="10" fill="#238636"/>
+  <text x="220" y="516" font-family="Consolas,monospace" font-size="13" fill="#ffffff" font-weight="bold">[wmux] session:1 | panes:1 | Ctrl+B d:detach</text>
+
+  <!-- Bottom info -->
+  <text x="600" y="580" text-anchor="middle" font-family="Segoe UI,system-ui,sans-serif" font-size="18" fill="#58a6ff">cargo install wmux</text>
+  <text x="600" y="608" text-anchor="middle" font-family="Segoe UI,system-ui,sans-serif" font-size="14" fill="#484f58">github.com/bahri-hirfanoglu/wmux | Free &amp; Open Source | Rust + ConPTY</text>
+</svg>
